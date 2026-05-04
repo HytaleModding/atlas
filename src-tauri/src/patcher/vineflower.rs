@@ -82,6 +82,73 @@ pub async fn ensure_vineflower(app: &AppHandle, status: &SharedStatus) -> Result
     Ok(path)
 }
 
+/// CLI variant of [`ensure_vineflower`] used by `atlas-build decompile`.
+/// Caller passes the directory where the JAR should live (typically
+/// `<cache_root>/tools/`). No Tauri AppHandle, no event emission - just
+/// tracing logs. Hash check + re-download semantics match the desktop
+/// flow.
+pub async fn ensure_vineflower_at(cache_dir: &Path) -> Result<PathBuf> {
+    tokio::fs::create_dir_all(cache_dir)
+        .await
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+    let path = cache_dir.join(format!("vineflower-{VINEFLOWER_VERSION}.jar"));
+
+    if path.exists() {
+        match verify_sha256(&path).await {
+            Ok(true) => {
+                tracing::info!("vineflower cached at {}", path.display());
+                return Ok(path);
+            }
+            Ok(false) => {
+                tracing::warn!(
+                    "vineflower at {} failed hash check, re-downloading",
+                    path.display()
+                );
+                let _ = tokio::fs::remove_file(&path).await;
+            }
+            Err(err) => {
+                tracing::warn!(?err, "vineflower hash check errored, re-downloading");
+                let _ = tokio::fs::remove_file(&path).await;
+            }
+        }
+    }
+
+    tracing::info!("downloading vineflower → {}", path.display());
+    download_quiet(&path)
+        .await
+        .with_context(|| format!("downloading Vineflower to {}", path.display()))?;
+
+    if !verify_sha256(&path).await? {
+        let _ = tokio::fs::remove_file(&path).await;
+        return Err(anyhow!(
+            "downloaded Vineflower failed SHA256 integrity check; expected {VINEFLOWER_SHA256}"
+        ));
+    }
+
+    tracing::info!("vineflower downloaded and verified at {}", path.display());
+    Ok(path)
+}
+
+async fn download_quiet(dest: &Path) -> Result<()> {
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("Atlas/", env!("CARGO_PKG_VERSION")))
+        .build()?;
+    let bytes = client
+        .get(VINEFLOWER_URL)
+        .send()
+        .await
+        .context("GET vineflower release")?
+        .error_for_status()
+        .context("vineflower release returned non-2xx")?
+        .bytes()
+        .await
+        .context("downloading vineflower body")?;
+    tokio::fs::write(dest, &bytes)
+        .await
+        .with_context(|| format!("writing {}", dest.display()))?;
+    Ok(())
+}
+
 async fn download(dest: &Path, app: &AppHandle, status: &SharedStatus) -> Result<()> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("Atlas/", env!("CARGO_PKG_VERSION")))

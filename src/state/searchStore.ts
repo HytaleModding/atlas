@@ -35,7 +35,27 @@ function sectionToSourceTypes(c: Section): string[] | undefined {
  *
  * We keep the selected hit here too so the RightPanel can render the
  * viewer without prop-drilling through AppShell.
+ *
+ * Per-branch state preservation: the top-level fields hold the *active*
+ * branch's view. When the user flips branches via branchStore, we snapshot
+ * the current state into `bySlot[oldSlot]` and restore from
+ * `bySlot[newSlot]` so each branch behaves like its own tab — its query,
+ * results, selection, viewer history, and section chip survive the flip.
  */
+type SlotSnapshot = {
+  query: string;
+  section: Section;
+  status: "idle" | "pending" | "ready" | "error";
+  hits: SearchHit[];
+  elapsedMs: number | null;
+  error: string | null;
+  selectedHit: SearchHit | null;
+  limit: number;
+  hasMore: boolean;
+  viewerHistory: SearchHit[];
+  viewerHistoryIndex: number;
+};
+
 type SearchState = {
   query: string;
   slot: Slot | null;
@@ -66,6 +86,13 @@ type SearchState = {
   viewerHistory: SearchHit[];
   viewerHistoryIndex: number;
 
+  /** Which slot the top-level fields belong to. `null` until the first
+   *  `switchSlot` call lands. */
+  currentSlot: Slot | null;
+  /** Stashed per-slot snapshots for branches the user isn't currently
+   *  looking at. Populated lazily on `switchSlot`. */
+  bySlot: Partial<Record<Slot, SlotSnapshot>>;
+
   setQuery: (q: string, slot: Slot | null) => void;
   /** Switch section; if a query is active, re-run it through the new filter. */
   setSection: (c: Section) => void;
@@ -82,8 +109,28 @@ type SearchState = {
   pushHistory: (q: string) => void;
   /** Clear all persisted query history. */
   clearHistory: () => void;
+  /** Snapshot the current branch's state, then restore the other branch's
+   *  saved state (or defaults if it's never been visited). Called from
+   *  `branchStore.set` whenever the branch toggle flips. */
+  switchSlot: (newSlot: Slot) => void;
   reset: () => void;
 };
+
+function emptySnapshot(): SlotSnapshot {
+  return {
+    query: "",
+    section: "all",
+    status: "idle",
+    hits: [],
+    elapsedMs: null,
+    error: null,
+    selectedHit: null,
+    limit: PAGE_SIZE,
+    hasMore: false,
+    viewerHistory: [],
+    viewerHistoryIndex: -1,
+  };
+}
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const DEBOUNCE_MS = 180;
@@ -111,6 +158,8 @@ export const useSearchStore = create<SearchState>()(
   history: [],
   viewerHistory: [],
   viewerHistoryIndex: -1,
+  currentSlot: null,
+  bySlot: {},
 
   setQuery: (q, slot) => {
     // New query → reset paging state.
@@ -259,6 +308,63 @@ export const useSearchStore = create<SearchState>()(
   },
 
   clearHistory: () => set({ history: [] }),
+
+  switchSlot: (newSlot) => {
+    const state = get();
+    if (state.currentSlot === newSlot) {
+      // First call after boot: just record the slot without snapshotting
+      // (top-level state is already a clean default for it).
+      if (state.currentSlot === null) {
+        set({ currentSlot: newSlot, slot: newSlot });
+      }
+      return;
+    }
+    // Cancel any pending debounce so a search keystroke from the prior
+    // branch doesn't fire against the new one.
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    // Snapshot the current branch's state so a flip-back restores it.
+    const bySlot = { ...state.bySlot };
+    if (state.currentSlot !== null) {
+      bySlot[state.currentSlot] = {
+        query: state.query,
+        section: state.section,
+        status: state.status,
+        hits: state.hits,
+        elapsedMs: state.elapsedMs,
+        error: state.error,
+        selectedHit: state.selectedHit,
+        limit: state.limit,
+        hasMore: state.hasMore,
+        viewerHistory: state.viewerHistory,
+        viewerHistoryIndex: state.viewerHistoryIndex,
+      };
+    }
+    const restore = bySlot[newSlot] ?? emptySnapshot();
+    // Bumping `lastRequestId` invalidates any in-flight `runNow` started
+    // for the prior branch — its `if (get().lastRequestId !== id) return;`
+    // guard will drop the response instead of writing it into the new
+    // branch's hit list.
+    set({
+      query: restore.query,
+      section: restore.section,
+      status: restore.status,
+      hits: restore.hits,
+      elapsedMs: restore.elapsedMs,
+      error: restore.error,
+      selectedHit: restore.selectedHit,
+      limit: restore.limit,
+      hasMore: restore.hasMore,
+      viewerHistory: restore.viewerHistory,
+      viewerHistoryIndex: restore.viewerHistoryIndex,
+      slot: newSlot,
+      currentSlot: newSlot,
+      bySlot,
+      lastRequestId: state.lastRequestId + 1,
+    });
+  },
 
   reset: () => {
     if (debounceTimer) clearTimeout(debounceTimer);

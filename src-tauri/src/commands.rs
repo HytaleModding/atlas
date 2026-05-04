@@ -127,7 +127,7 @@ fn spawn_index(
  // HM docs (`hm_doc`) live in their own decoupled `guides` index
  // (see `crate::guides`); the desktop pipeline only handles
  // decompiled source.
-        match indexer::run(embedder, slot, decompile_dir, index_dir, lance_dir, sink, None, None, None).await {
+        match indexer::run(embedder, slot, decompile_dir, index_dir, lance_dir, sink, None, None, None, None, None).await {
             Ok(()) => {
  // Force the next search to reopen the fresh index.
                 catalog.invalidate(slot);
@@ -636,7 +636,12 @@ pub fn get_inline_javadocs(
 ) -> Result<Vec<InlineJavadoc>, String> {
     let data_dir = data_dir()?;
     let index_dir = indexer::index_dir_for(data_dir.as_path(), slot);
-    let cache_dir = atlas_cache_root().join("javadocs");
+    // Per-slot Javadoc HTML, populated at mount time from the artifact's
+    // `javadocs/` payload. The dev-machine `atlas_cache_root()/javadocs/`
+    // is no longer the runtime source - if a build shipped without docs
+    // the user gets no inline cards, full stop, instead of accidentally
+    // borrowing the dev box's cache.
+    let cache_dir = indexer::javadocs_dir_for(data_dir.as_path(), slot);
     let catalog_arc: Arc<SearchCatalog> = (*catalog).clone();
 
     let parsed = catalog_arc
@@ -802,12 +807,14 @@ pub fn find_source_siblings(
 ///
 /// * `source` (decompiled Java) → `<data_dir>/patcher/<slot>/decompile/`
 /// * `hm_doc` (HM Modding markdown guides) → `<cache_root>/hm-docs/site/`
-/// * `hypixel_doc` (Hypixel Javadoc HTML) → `<cache_root>/javadocs/`
+/// * `hypixel_doc` (Hypixel Javadoc HTML) → `<data_dir>/indexes/javadocs/<slot>/`
 /// (the stored rel_path already includes the host segment, e.g.
 /// `release.server.docs.hytale.com/com/hypixel/.../Foo.html`)
 ///
-/// `<cache_root>` is the same shared cache `atlas-build` writes into;
-/// see `crate::cache_root` for the resolution order.
+/// HM docs still live under the shared dev cache - they aren't shipped
+/// in the artifact today. Hypixel Javadocs ship inside the artifact and
+/// are unpacked per-slot at mount time, so the runtime path is bound to
+/// the active slot rather than the dev-machine cache.
 #[tauri::command]
 pub fn read_source(slot: Slot, path: String, source_type: String) -> Result<String, String> {
     let data_dir = data_dir()?;
@@ -816,7 +823,7 @@ pub fn read_source(slot: Slot, path: String, source_type: String) -> Result<Stri
  // pre-date the `source_type` field; treat as decompiled Java.
         "source" | "" => patcher::workspace_for(data_dir.as_path(), slot).join("decompile"),
         "hm_doc" => atlas_cache_root().join("hm-docs").join("site"),
-        "hypixel_doc" => atlas_cache_root().join("javadocs"),
+        "hypixel_doc" => indexer::javadocs_dir_for(data_dir.as_path(), slot),
         other => return Err(format!("unsupported source_type: {other}")),
     };
     let raw = indexer::read_source(&base, &path).map_err(|e| format!("{e:#}"))?;
@@ -1034,4 +1041,620 @@ fn dir_size_bytes(path: &Path) -> u64 {
         }
     }
     total
+}
+
+// -----------------------------------------------------------------------
+// Remote resolver, mount management, active-build selection.
+// Three commands powering the IndexCatalog UX:
+//   - index_resolve_remote: ask GH Releases what build is current
+//   - index_remove        : delete a mounted build
+//   - index_set_active    : pick which mounted build search uses
+// -----------------------------------------------------------------------
+
+/// What `index_resolve_remote` returns to the frontend. `None` means the
+/// configured central repo has no published artifact for this patchline;
+/// `Some` carries the URL the user can hand to `index_fetch`.
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteBuildResolution {
+    pub build_id: String,
+    pub url: String,
+    pub release_tag: String,
+    /// The Hytale `Implementation-Version` carried in the release body, if
+    /// the workflow surfaced it. Surfaced for the UI's "Newer build available"
+    /// card.
+    pub hytale_impl_version: Option<String>,
+}
+
+/// Ask GitHub Releases for the latest signed artifact matching `patchline`
+/// in the configured `central_repo`. Public-only API, no auth - we accept
+/// the unauthenticated rate limit because resolves are rare (manual click
+/// or once-on-launch).
+#[tauri::command]
+pub async fn index_resolve_remote(
+    patchline: Slot,
+) -> Result<Option<RemoteBuildResolution>, String> {
+    let cfg = config::load().map_err(|e| e.to_string())?;
+    let repo = cfg.central_repo.trim();
+    if repo.is_empty() {
+        return Err("no central_repo configured".to_string());
+    }
+
+    let url = format!("https://api.github.com/repos/{repo}/releases?per_page=30");
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("Atlas/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| format!("building http client: {e}"))?;
+
+    let releases: Vec<GhRelease> = client
+        .get(&url)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await
+        .map_err(|e| format!("GET {url}: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("GH releases returned non-2xx: {e}"))?
+        .json()
+        .await
+        .map_err(|e| format!("decoding GH releases JSON: {e}"))?;
+
+    // GH returns releases newest-first by published_at. Walk in order;
+    // first asset matching `atlas-index-<patchline>-*.tar.zst` wins.
+    let prefix = format!("atlas-index-{}-", patchline.as_str());
+    for release in releases {
+        if release.draft || release.prerelease_flag_unrelated_to_patchline() {
+            // We use `prerelease` only when the user explicitly publishes a
+            // GH Release as a prerelease (separate axis from Hytale's
+            // pre-release patchline). Skip those.
+            continue;
+        }
+        for asset in &release.assets {
+            if asset.name.starts_with(&prefix) && asset.name.ends_with(".tar.zst") {
+                let build_id = asset
+                    .name
+                    .trim_start_matches("atlas-index-")
+                    .trim_end_matches(".tar.zst")
+                    .to_string();
+                return Ok(Some(RemoteBuildResolution {
+                    build_id,
+                    url: asset.browser_download_url.clone(),
+                    release_tag: release.tag_name.clone(),
+                    hytale_impl_version: extract_impl_version(&release.body),
+                }));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Remove a mounted build from disk. Refuses if it's the only build
+/// mounted for its patchline (so the user can't accidentally lock
+/// themselves out of search). If the removed build was the active one,
+/// the active-build pointer in the config is cleared so the catalog
+/// can fall back to whatever else is mounted.
+#[tauri::command]
+pub fn index_remove(
+    catalog: State<'_, Arc<SearchCatalog>>,
+    build_id: String,
+) -> Result<(), String> {
+    if build_id.trim().is_empty() {
+        return Err("build_id is empty".to_string());
+    }
+    let data_dir = data_dir()?;
+    let root = fetcher::indexes_root(data_dir.as_path());
+    let target = root.join(&build_id);
+    if !target.is_dir() {
+        return Err(format!("no mounted build with id {build_id}"));
+    }
+
+    // Read the target's manifest to learn its patchline.
+    let manifest_bytes = std::fs::read(target.join("manifest.json"))
+        .map_err(|e| format!("reading manifest for {build_id}: {e}"))?;
+    let manifest = fetcher::manifest::Manifest::from_bytes(&manifest_bytes)
+        .map_err(|e| format!("parsing manifest for {build_id}: {e}"))?;
+    let target_slot = match manifest.hytale_patchline.as_deref() {
+        Some("pre-release") => Slot::PreRelease,
+        _ => Slot::Release,
+    };
+
+    // Count how many other mounts share this patchline.
+    let mounts = index_catalog()?;
+    let same_patchline_count = mounts
+        .iter()
+        .filter(|m| match m.manifest.hytale_patchline.as_deref() {
+            Some("pre-release") => target_slot == Slot::PreRelease,
+            _ => target_slot == Slot::Release,
+        })
+        .count();
+    if same_patchline_count <= 1 {
+        return Err(format!(
+            "refusing to remove the only mounted {} build (would leave search empty for that patchline)",
+            target_slot.as_str()
+        ));
+    }
+
+    // If this build is currently the active one for its patchline, clear
+    // the pointer in the config so the next search falls back cleanly.
+    let mut cfg = config::load().map_err(|e| e.to_string())?;
+    let cleared = match target_slot {
+        Slot::Release => {
+            if cfg.active_release_build.as_deref() == Some(build_id.as_str()) {
+                cfg.active_release_build = None;
+                true
+            } else {
+                false
+            }
+        }
+        Slot::PreRelease => {
+            if cfg.active_pre_release_build.as_deref() == Some(build_id.as_str()) {
+                cfg.active_pre_release_build = None;
+                true
+            } else {
+                false
+            }
+        }
+    };
+    if cleared {
+        config::save(&cfg).map_err(|e| e.to_string())?;
+    }
+
+    // Drop catalog handles before deleting from disk - Tantivy holds
+    // file handles on Windows that would block the rmdir otherwise.
+    catalog.invalidate(target_slot);
+    catalog.invalidate_id(&indexer::IndexId::new(&build_id));
+
+    std::fs::remove_dir_all(&target)
+        .map_err(|e| format!("removing {}: {e}", target.display()))?;
+    Ok(())
+}
+
+/// Pick which mounted build the search engine should target for a given
+/// patchline. The actual catalog read still happens at search time; this
+/// command just records the user's choice so it persists across restarts.
+#[tauri::command]
+pub fn index_set_active(patchline: Slot, build_id: String) -> Result<(), String> {
+    if build_id.trim().is_empty() {
+        return Err("build_id is empty".to_string());
+    }
+    // Verify the build is actually mounted with the right patchline.
+    let mounts = index_catalog()?;
+    let entry = mounts
+        .iter()
+        .find(|m| m.build_id == build_id)
+        .ok_or_else(|| format!("build {build_id} is not mounted"))?;
+    let entry_slot = match entry.manifest.hytale_patchline.as_deref() {
+        Some("pre-release") => Slot::PreRelease,
+        _ => Slot::Release,
+    };
+    if entry_slot != patchline {
+        return Err(format!(
+            "build {build_id} is a {} build, can't be active for {}",
+            entry_slot.as_str(),
+            patchline.as_str()
+        ));
+    }
+
+    let mut cfg = config::load().map_err(|e| e.to_string())?;
+    match patchline {
+        Slot::Release => cfg.active_release_build = Some(build_id),
+        Slot::PreRelease => cfg.active_pre_release_build = Some(build_id),
+    }
+    config::save(&cfg).map_err(|e| e.to_string())
+}
+
+// --- GH Releases API decoding ------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+struct GhRelease {
+    tag_name: String,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default, rename = "prerelease")]
+    is_gh_prerelease: bool,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    assets: Vec<GhAsset>,
+}
+
+impl GhRelease {
+    /// GitHub's "prerelease" flag is independent of Hytale's "pre-release"
+    /// patchline. We use the GH flag only as an "in-flight, don't pick
+    /// this yet" marker; the patchline comes from the asset filename.
+    fn prerelease_flag_unrelated_to_patchline(&self) -> bool {
+        self.is_gh_prerelease
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GhAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+/// Pull `Implementation-Version: <value>` out of the release body if the
+/// workflow embedded it. Surfaced for the "newer build available" card.
+fn extract_impl_version(body: &str) -> Option<String> {
+    for line in body.lines() {
+        if let Some(rest) = line.strip_prefix("Implementation-Version:") {
+            let v = rest.trim();
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+// =====================================================================
+// Project mode (Step 4): per-user mod source registration + indexing.
+// =====================================================================
+
+use crate::project::{
+    self, index::ProjectSink, ProjectId, ProjectRegistry, RegisteredProject,
+    SharedProjectRegistry,
+};
+
+/// JSON view of a registered project for the frontend. Mirrors
+/// `RegisteredProject` 1:1 plus a derived `index_ready` flag the UI
+/// uses to decide between "Index now" and "Re-index" / "Search".
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectListEntry {
+    pub id: String,
+    pub name: String,
+    pub source_path: String,
+    pub created_at: String,
+    pub last_indexed_at: Option<String>,
+    pub index_ready: bool,
+}
+
+fn to_entry(reg: &ProjectRegistry, p: &RegisteredProject) -> ProjectListEntry {
+    let index_dir = reg.project_index_dir(&p.id);
+    // The same readiness probe SearchCatalog uses internally - presence
+    // of `atlas-meta.json` is the canonical "this index is committed"
+    // marker, written at the end of `indexer::run`.
+    let index_ready = index_dir.join("atlas-meta.json").exists();
+    ProjectListEntry {
+        id: p.id.as_str().to_string(),
+        name: p.name.clone(),
+        source_path: p.source_path.to_string_lossy().into_owned(),
+        created_at: p.created_at.clone(),
+        last_indexed_at: p.last_indexed_at.clone(),
+        index_ready,
+    }
+}
+
+/// Register a folder as a project. Idempotent: re-registering the same
+/// path returns the same id with no side effects beyond an updated
+/// display name when one is supplied.
+#[tauri::command]
+pub fn project_register(
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+    path: String,
+    name: Option<String>,
+) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    registry
+        .with(|r| r.register(&p, name))
+        .map(|id| id.into_string())
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Snapshot of the current project list. Cheap; called on every
+/// IndexCatalog / Settings render.
+#[tauri::command]
+pub fn project_list(
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+) -> Vec<ProjectListEntry> {
+    registry.with(|r| {
+        r.list()
+            .iter()
+            .map(|p| to_entry(r, p))
+            .collect()
+    })
+}
+
+/// Drop the project from the registry AND wipe its index dir on disk.
+/// Errors on unknown id; index-dir removal failures are swallowed (the
+/// registry entry comes off either way - a stuck index dir shouldn't
+/// strand the project as undeletable).
+#[tauri::command]
+pub fn project_unregister(
+    catalog: State<'_, Arc<SearchCatalog>>,
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+    id: String,
+) -> Result<(), String> {
+    let pid = ProjectId::from(id);
+    registry
+        .with(|r| {
+            // Release the catalog's cached reader before rmtree so
+            // Tantivy file handles don't pin the directory on Windows.
+            // Mirrors the ordering used by `index_remove`.
+            catalog.invalidate_id(&r.index_id(&pid));
+            if let Err(err) = r.remove_index_dir(&pid) {
+                tracing::warn!(?err, project_id = %pid, "removing project index dir failed");
+            }
+            r.unregister(&pid)
+        })
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Wipe just the index dir, keep the registry entry. UI shows the row
+/// as "not indexed yet" afterwards. Doesn't error if the index doesn't
+/// exist - this is a "reset to clean state" operation.
+#[tauri::command]
+pub fn project_remove_index(
+    catalog: State<'_, Arc<SearchCatalog>>,
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+    id: String,
+) -> Result<(), String> {
+    let pid = ProjectId::from(id);
+    registry
+        .with(|r| {
+            catalog.invalidate_id(&r.index_id(&pid));
+            r.remove_index_dir(&pid)
+        })
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Kick off a project index run on the shared runtime. Emits
+/// `project:phase` / `project:progress` / `project:done` events tagged
+/// with the project id; returns immediately so the UI can subscribe.
+#[tauri::command]
+pub fn project_index(
+    app: AppHandle,
+    rt: State<'_, RuntimeHandle>,
+    catalog: State<'_, Arc<SearchCatalog>>,
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+    embedder_state: State<'_, Arc<SharedEmbedder>>,
+    id: String,
+) -> Result<(), String> {
+    let pid = ProjectId::from(id);
+
+    // Resolve paths up front so the spawned task doesn't have to touch
+    // the registry mutex from the indexer thread.
+    let (source_path, index_dir, lance_dir, index_id) = registry
+        .with(|r| {
+            let p = r
+                .get(&pid)
+                .ok_or_else(|| format!("no project with id {pid}"))?;
+            Ok::<_, String>((
+                p.source_path.clone(),
+                r.project_index_dir(&pid),
+                r.project_lance_dir(&pid),
+                r.index_id(&pid),
+            ))
+        })?;
+
+    // Resolve the embedder model cache the same way `commands::index_start`
+    // does so the BGE-small download is shared across desktop indexing
+    // and project indexing.
+    let model_cache = crate::cache_root().join("models");
+    if let Err(err) = std::fs::create_dir_all(&model_cache) {
+        return Err(format!(
+            "creating embedder model cache {}: {err:#}",
+            model_cache.display()
+        ));
+    }
+    let embedder = embedder_state
+        .get_or_init(model_cache)
+        .map_err(|e| format!("loading embedder: {e:#}"))?;
+
+    let sink = Arc::new(ProjectSink {
+        app: app.clone(),
+        project_id: pid.clone(),
+    });
+
+    let app_for_task = app.clone();
+    let catalog_for_task: Arc<SearchCatalog> = (*catalog).clone();
+    let registry_for_task: Arc<SharedProjectRegistry> = (*registry).clone();
+    let project_id_for_task = pid.clone();
+    let index_id_for_task = index_id;
+
+    rt.0.spawn(async move {
+        let result = project::index::run_project_index(
+            embedder,
+            project_id_for_task.clone(),
+            source_path,
+            index_dir,
+            lance_dir,
+            sink,
+        )
+        .await;
+        match result {
+            Ok(()) => {
+                // Drop any stale cached reader so the next search opens
+                // the freshly-built index. Same ordering rule as the
+                // fetch / remove paths.
+                catalog_for_task.invalidate_id(&index_id_for_task);
+                registry_for_task.with(|r| {
+                    if let Err(err) = r.mark_indexed(&project_id_for_task) {
+                        tracing::warn!(?err, "mark_indexed failed");
+                    }
+                });
+            }
+            Err(err) => {
+                tracing::error!(?err, project_id = %project_id_for_task, "project indexer failed");
+                let _ = app_for_task.emit(
+                    "project:error",
+                    serde_json::json!({
+                        "project_id": project_id_for_task.as_str(),
+                        "message": format!("{err:#}"),
+                    }),
+                );
+            }
+        }
+    });
+
+    Ok(())
+}
+
+// =====================================================================
+// Diff tracker (Step 5): "what would break in MY mod if Hytale shipped X".
+// =====================================================================
+
+/// Resolve a registered project id + two mounted build ids into a
+/// [`crate::diff::DiffReport`]. Synchronous from the frontend's
+/// perspective - the diff itself is fast (single-pass query loop) and
+/// rarely worth streaming.
+#[tauri::command]
+pub fn diff_run(
+    registry: State<'_, Arc<SharedProjectRegistry>>,
+    project_id: String,
+    baseline_build_id: String,
+    target_build_id: String,
+) -> Result<crate::diff::DiffReport, String> {
+    if baseline_build_id == target_build_id {
+        return Err("baseline and target are the same build".to_string());
+    }
+
+    // Project source dir comes from the registry.
+    let pid = ProjectId::from(project_id);
+    let project_dir = registry
+        .with(|r| {
+            r.get(&pid)
+                .map(|p| p.source_path.clone())
+                .ok_or_else(|| format!("no project with id {pid}"))
+        })?;
+
+    // Both builds must be currently mounted. Resolve symbols.sqlite via
+    // the helper so we don't care whether it's at <root>/symbols.sqlite
+    // (Hytale builds) or <root>/tantivy/symbols.sqlite (project nested).
+    let mounts = index_catalog()?;
+    let (baseline_root, baseline_label) = lookup_mount(&mounts, &baseline_build_id)?;
+    let (target_root, target_label) = lookup_mount(&mounts, &target_build_id)?;
+
+    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root)
+        .ok_or_else(|| format!("no symbols.sqlite in baseline at {}", baseline_root.display()))?;
+    let target_symbols = crate::diff::pick_symbols_path(&target_root)
+        .ok_or_else(|| format!("no symbols.sqlite in target at {}", target_root.display()))?;
+
+    crate::diff::run_project_diff(
+        &project_dir,
+        baseline_label,
+        &baseline_symbols,
+        target_label,
+        &target_symbols,
+    )
+    .map_err(|e| format!("{e:#}"))
+}
+
+/// Corpus-wide compare between two mounted builds. Reuses the same
+/// mount-lookup + symbols.sqlite probe that `diff_run` does.
+#[tauri::command]
+pub fn index_compare(
+    baseline_build_id: String,
+    target_build_id: String,
+) -> Result<crate::diff::compare::CompareReport, String> {
+    if baseline_build_id == target_build_id {
+        return Err("baseline and target are the same build".to_string());
+    }
+    let mounts = index_catalog()?;
+    let (baseline_root, baseline_label) = lookup_mount(&mounts, &baseline_build_id)?;
+    let (target_root, target_label) = lookup_mount(&mounts, &target_build_id)?;
+
+    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root)
+        .ok_or_else(|| format!("no symbols.sqlite in baseline at {}", baseline_root.display()))?;
+    let target_symbols = crate::diff::pick_symbols_path(&target_root)
+        .ok_or_else(|| format!("no symbols.sqlite in target at {}", target_root.display()))?;
+
+    let baseline_db = crate::indexer::symbols::SymbolsDb::open_read_only(&baseline_symbols)
+        .map_err(|e| format!("opening baseline symbols.sqlite: {e:#}"))?;
+    let target_db = crate::indexer::symbols::SymbolsDb::open_read_only(&target_symbols)
+        .map_err(|e| format!("opening target symbols.sqlite: {e:#}"))?;
+
+    crate::diff::compare::compare(&baseline_db, baseline_label, &target_db, target_label)
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Find a mounted build by id and return `(root_path, friendly_label)`.
+/// The label is what the report quotes in headings; we prefer the
+/// human-readable patchline + Hytale impl-version, falling back to the
+/// raw build id if the manifest is sparse.
+fn lookup_mount(
+    mounts: &[MountedIndexEntry],
+    build_id: &str,
+) -> Result<(PathBuf, String), String> {
+    let entry = mounts
+        .iter()
+        .find(|m| m.build_id == build_id)
+        .ok_or_else(|| format!("build {build_id} is not mounted"))?;
+    let label = match entry.manifest.hytale_patchline.as_deref() {
+        Some(p) if !entry.manifest.hytale_impl_version.is_empty() => {
+            format!("{p} · {}", entry.manifest.hytale_impl_version)
+        }
+        Some(p) => p.to_string(),
+        None if !entry.manifest.hytale_impl_version.is_empty() => {
+            entry.manifest.hytale_impl_version.clone()
+        }
+        None => build_id.to_string(),
+    };
+    Ok((entry.path.clone(), label))
+}
+
+// =====================================================================
+// User state (Step 7): pins, notes, recent files. Backed by state.sqlite.
+// =====================================================================
+
+use crate::state::{Pin, PinKind, RecentFile, StateDb};
+
+/// Pin a file / query / symbol so the user can find it again later.
+/// Idempotent: a second call for the same `(kind, target, build_id)`
+/// returns the existing row.
+#[tauri::command]
+pub fn state_pin_add(
+    db: State<'_, Arc<StateDb>>,
+    kind: PinKind,
+    target: String,
+    build_id: Option<String>,
+    label: Option<String>,
+) -> Result<Pin, String> {
+    db.pin_add(kind, &target, build_id.as_deref(), label.as_deref())
+        .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn state_pin_remove(db: State<'_, Arc<StateDb>>, id: i64) -> Result<(), String> {
+    db.pin_remove(id).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn state_pin_list(db: State<'_, Arc<StateDb>>) -> Result<Vec<Pin>, String> {
+    db.pin_list().map_err(|e| format!("{e:#}"))
+}
+
+/// Set or clear a note. Empty `body` deletes the note row.
+#[tauri::command]
+pub fn state_note_set(
+    db: State<'_, Arc<StateDb>>,
+    pin_id: i64,
+    body: String,
+) -> Result<(), String> {
+    db.note_set(pin_id, &body).map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn state_note_get(
+    db: State<'_, Arc<StateDb>>,
+    pin_id: i64,
+) -> Result<Option<String>, String> {
+    db.note_get(pin_id).map_err(|e| format!("{e:#}"))
+}
+
+/// Record that the user just opened `(path, build_id)`. Bounds the
+/// recent_files table to the most recent N rows automatically.
+#[tauri::command]
+pub fn state_recent_file_record(
+    db: State<'_, Arc<StateDb>>,
+    path: String,
+    build_id: String,
+) -> Result<(), String> {
+    db.recent_file_record(&path, &build_id)
+        .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub fn state_recent_files(
+    db: State<'_, Arc<StateDb>>,
+) -> Result<Vec<RecentFile>, String> {
+    db.recent_files().map_err(|e| format!("{e:#}"))
 }

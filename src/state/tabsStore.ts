@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { SearchHit } from "@/lib/indexer";
+import type { Slot } from "@/lib/patcher";
 import { useSearchStore } from "@/state/searchStore";
 
 /**
@@ -8,7 +9,19 @@ import { useSearchStore } from "@/state/searchStore";
  * the new line. The hit stored on the tab is the *most recent* hit the
  * user opened for that file (line range, selected chunk, etc.) so the
  * viewer can pick up cleanly when the tab is reactivated.
+ *
+ * Per-branch tab strips: `tabs` and `activeId` reflect the *currently
+ * active branch only*. When the user flips branches we snapshot
+ * `{ tabs, activeId }` into `bySlot[oldSlot]` and restore from
+ * `bySlot[newSlot]`, so each branch keeps its own open files and active
+ * tab. `scrollByTabId` stays global because the tab id already includes
+ * the slot prefix, so positions don't collide across branches.
  */
+type TabsSlotSnapshot = {
+  tabs: SearchHit[];
+  activeId: string | null;
+};
+
 type TabsState = {
   tabs: SearchHit[];
   activeId: string | null;
@@ -16,10 +29,18 @@ type TabsState = {
    *  the tab is reactivated so flipping between tabs preserves where
    *  the reader was. Keyed by `${slot}:${path}`. */
   scrollByTabId: Record<string, number>;
+  /** Which slot the top-level fields belong to. `null` until the first
+   *  `switchSlot` lands. */
+  currentSlot: Slot | null;
+  /** Stashed per-slot { tabs, activeId } for the inactive branch. */
+  bySlot: Partial<Record<Slot, TabsSlotSnapshot>>;
   openTab: (hit: SearchHit) => void;
   closeTab: (id: string) => void;
   setActive: (id: string) => void;
   setScroll: (id: string, top: number) => void;
+  /** Snapshot the active branch's tab strip into bySlot, restore the
+   *  other branch's. Called from `branchStore.set`. */
+  switchSlot: (newSlot: Slot) => void;
   reset: () => void;
 };
 
@@ -31,6 +52,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   tabs: [],
   activeId: null,
   scrollByTabId: {},
+  currentSlot: null,
+  bySlot: {},
 
   openTab: (hit) => {
     const id = tabIdOf(hit);
@@ -94,5 +117,38 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set({ scrollByTabId: { ...scrollByTabId, [id]: top } });
   },
 
-  reset: () => set({ tabs: [], activeId: null, scrollByTabId: {} }),
+  switchSlot: (newSlot) => {
+    const state = get();
+    if (state.currentSlot === newSlot) {
+      if (state.currentSlot === null) set({ currentSlot: newSlot });
+      return;
+    }
+    const bySlot = { ...state.bySlot };
+    if (state.currentSlot !== null) {
+      bySlot[state.currentSlot] = {
+        tabs: state.tabs,
+        activeId: state.activeId,
+      };
+    }
+    const restore = bySlot[newSlot] ?? { tabs: [], activeId: null };
+    set({
+      tabs: restore.tabs,
+      activeId: restore.activeId,
+      currentSlot: newSlot,
+      bySlot,
+    });
+    // We deliberately do NOT mirror activeId's hit back into
+    // searchStore.selectedHit here — searchStore.switchSlot already
+    // restored its own selectedHit, which may differ if the user used
+    // Alt+← viewer history before the flip.
+  },
+
+  reset: () =>
+    set({
+      tabs: [],
+      activeId: null,
+      scrollByTabId: {},
+      bySlot: {},
+      currentSlot: null,
+    }),
 }));

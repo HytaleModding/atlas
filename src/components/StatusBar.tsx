@@ -2,6 +2,7 @@ import { useConfigStore } from "@/state/configStore";
 import { useIndexStore } from "@/state/indexStore";
 import { indexPhaseLabel } from "@/lib/indexer";
 import { slotLabel } from "@/lib/patcher";
+import { ActiveBuildChips } from "./ActiveBuildChips";
 
 /** Status bar per ui-spec.md § Application Shell. Reads live config +
  *  indexer state so long-running work is visible even when the user has
@@ -45,10 +46,11 @@ export function StatusBar() {
       style={{ height: "var(--status-bar-height)" }}
     >
       <span>{leftLabel}</span>
-      <span className="flex gap-4">
+      <div className="flex items-center gap-3">
+        <ActiveBuildChips />
         <span title={hytalePath ?? undefined}>{hytaleLabel}</span>
         {import.meta.env.DEV && <span>Atlas 0.1.0-dev</span>}
-      </span>
+      </div>
     </div>
   );
 }

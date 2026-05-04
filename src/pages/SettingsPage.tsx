@@ -259,6 +259,19 @@ function DeveloperSection() {
   const status = useFetchStore((s) => s.status);
   const showDebug = useUIPrefsStore((s) => s.showDebug);
   const setShowDebug = useUIPrefsStore((s) => s.setShowDebug);
+  const snapshot = useConfigStore((s) => s.snapshot);
+  const updateConfig = useConfigStore((s) => s.update);
+  const [repoDraft, setRepoDraft] = useState(
+    snapshot?.config.central_repo ?? "",
+  );
+  const [savingRepo, setSavingRepo] = useState(false);
+
+  // Keep the draft in sync if config reloads while the section is open.
+  useEffect(() => {
+    if (snapshot?.config.central_repo !== undefined) {
+      setRepoDraft(snapshot.config.central_repo);
+    }
+  }, [snapshot?.config.central_repo]);
 
   const busy =
     status.kind === "phase" ||
@@ -322,6 +335,47 @@ function DeveloperSection() {
               <FolderOpen size={14} strokeWidth={2.25} />
               Pick file…
             </button>
+          </div>
+
+          <div className="mt-3 rounded-md border border-border-subtle bg-bg-base p-3">
+            <div className="mb-2">
+              <div className="text-sm text-fg-primary">
+                Reference data source
+              </div>
+              <div className="mt-0.5 text-xs text-fg-muted">
+                GitHub repo (<code>owner/name</code>) Atlas pulls
+                published reference data from. Defaults to the dev test
+                repo; flip this when HM publishes their first build.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={repoDraft}
+                onChange={(e) => setRepoDraft(e.target.value)}
+                placeholder="Vibe-Theory/atlastest"
+                spellCheck={false}
+                className="flex-1 rounded border border-border-subtle bg-bg-base px-2 py-1 font-mono text-xs text-fg-primary"
+              />
+              <button
+                type="button"
+                disabled={
+                  savingRepo ||
+                  repoDraft.trim() === (snapshot?.config.central_repo ?? "")
+                }
+                onClick={async () => {
+                  setSavingRepo(true);
+                  try {
+                    await updateConfig({ central_repo: repoDraft.trim() });
+                  } finally {
+                    setSavingRepo(false);
+                  }
+                }}
+                className="rounded border border-border-subtle px-3 py-1 text-xs text-fg-secondary hover:bg-bg-elevated disabled:opacity-50"
+              >
+                {savingRepo ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border-subtle bg-bg-base p-3">

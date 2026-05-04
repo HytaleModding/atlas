@@ -28,6 +28,7 @@
   --color-section-javadocs: var(--section-javadocs);
   --color-section-assets: var(--section-assets);
   --color-section-mydocs: var(--section-mydocs);
+  --color-section-project: var(--section-project);
 
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);

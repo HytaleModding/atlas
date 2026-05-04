@@ -19,6 +19,9 @@ const EMPTY_CONFIG: AtlasConfig = {
   hytale_prerelease_path: null,
   first_run_skipped: false,
   active_branch: "release",
+  central_repo: "Vibe-Theory/atlastest",
+  active_release_build: null,
+  active_pre_release_build: null,
 };
 
 /** Global Atlas config, kept in sync with the Rust-side JSON file. */
