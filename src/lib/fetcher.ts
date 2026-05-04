@@ -2,17 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Slot } from "@/lib/patcher";
 
 /**
- * Hardcoded data-package URL + build id for the local testing loop.
- * Resolver (Hytale build → GitHub Release URL) lands later; until then,
- * dev builds point at a `python -m http.server 8000` running in the
- * staging dir on localhost. Both BranchCard and SearchPage consume this,
- * keep them in sync via this single source.
- *
- * Production builds get an empty record so the UI surfaces "central data
- * resolver not yet wired" instead of silently fetching from a localhost
- * that won't be running on a real user's machine.
+ * Dev-only fallback URLs. Production builds resolve through the central
+ * GitHub Releases repo (`index_resolve_remote`), so this map only carries
+ * the localhost staging URLs that let a dev iterate against a
+ * `python -m http.server 8000` without touching CI. The Settings →
+ * "Reference data source" dropdown gates which path the UI takes.
  */
-export const FETCH_URL_BY_SLOT: Record<Slot, FetchRequest> = import.meta.env.DEV
+export const DEV_FETCH_URL_BY_SLOT: Record<Slot, FetchRequest> = import.meta.env
+  .DEV
   ? {
       release: {
         buildId: "release-test",
@@ -103,6 +100,44 @@ export async function getFetchStatus(): Promise<FetchStatus> {
 
 export async function listMountedIndexes(): Promise<MountedIndexEntry[]> {
   return invoke<MountedIndexEntry[]>("index_catalog");
+}
+
+/** What `index_resolve_remote` returns. Mirrors `RemoteBuildResolution`
+ *  in commands.rs. `null` means the central repo has no published build
+ *  for the requested patchline yet. */
+export type RemoteBuildResolution = {
+  build_id: string;
+  url: string;
+  release_tag: string;
+  hytale_impl_version: string | null;
+};
+
+/** Ask the central repo what the latest published build is for a
+ *  patchline. Returns `null` when the central repo hasn't published one
+ *  yet (the catalog UX surfaces this as "no update available"). */
+export async function resolveRemoteBuild(
+  patchline: Slot,
+): Promise<RemoteBuildResolution | null> {
+  const raw = await invoke<RemoteBuildResolution | null>(
+    "index_resolve_remote",
+    { patchline },
+  );
+  return raw;
+}
+
+/** Delete a mounted build. The backend refuses if it's the only build
+ *  mounted for its patchline. Throws with the backend's error string on
+ *  refusal so the caller can surface it in a toast. */
+export async function removeIndex(buildId: string): Promise<void> {
+  await invoke<void>("index_remove", { buildId });
+}
+
+/** Pick which mounted build search uses for a patchline. */
+export async function setActiveIndex(
+  patchline: Slot,
+  buildId: string,
+): Promise<void> {
+  await invoke<void>("index_set_active", { patchline, buildId });
 }
 
 /** Human-readable label for the download phase shown in the UI. */

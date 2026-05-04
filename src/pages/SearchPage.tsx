@@ -70,7 +70,6 @@ export function SearchPage() {
   const searchError = useSearchStore((s) => s.error);
   const selected = useSearchStore((s) => s.selectedHit);
   const setSelected = useSearchStore((s) => s.setSelected);
-  const resetSearch = useSearchStore((s) => s.reset);
   const hasMore = useSearchStore((s) => s.hasMore);
   const showMore = useSearchStore((s) => s.showMore);
   const history = useSearchStore((s) => s.history);
@@ -223,10 +222,10 @@ export function SearchPage() {
   }, [rows]);
 
   const dataLoading = fetchActiveBuildId !== null;
-
-  useEffect(() => {
-    resetSearch();
-  }, [activeSlot, resetSearch]);
+  // Branch flips are handled by `branchStore.set` calling
+  // `searchStore.switchSlot` + `tabsStore.switchSlot`, which snapshot the
+  // outgoing branch and restore the incoming one. No reset here — that
+  // would defeat the whole point of preserving each branch's state.
 
   // Build a flat hit list to drive j/k navigation: married rows expose
   // their primary as the navigable hit.
@@ -1346,6 +1345,8 @@ function sectionMeta(sourceType: string): SectionMeta {
       return { label: "Javadocs", color: "var(--section-javadocs)" };
     case "asset":
       return { label: "Assets", color: "var(--section-assets)" };
+    case "project_source":
+      return { label: "Your code", color: "var(--section-project)" };
     case "source":
     case "":
     default:

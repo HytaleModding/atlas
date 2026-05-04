@@ -7,7 +7,7 @@ import { create } from "zustand";
  * Projects, Tracker, and Logs land in later phases; a real router is
  * overkill until then.
  */
-export type PageId = "search" | "catalog" | "settings";
+export type PageId = "search" | "catalog" | "settings" | "diff";
 
 type NavState = {
   page: PageId;

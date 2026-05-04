@@ -33,7 +33,7 @@ impl Slot {
 /// User-visible Atlas configuration. Any field that should persist across app
 /// restarts lives here. Missing fields deserialize to their defaults so old
 /// configs stay forward-compatible.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AtlasConfig {
     /// Path to the Hytale release install (directory containing `Server/HytaleServer.jar`).
@@ -44,6 +44,39 @@ pub struct AtlasConfig {
     pub first_run_skipped: bool,
     /// Which branch the LeftNav defaults to on app startup.
     pub active_branch: Slot,
+    /// `owner/name` of the GitHub repository that hosts published reference
+    /// data releases. The desktop client queries this repo's Releases API to
+    /// discover and download new builds. Defaults to the dev test repo until
+    /// the public hand-off.
+    pub central_repo: String,
+    /// build_id of the build the user has selected as the active reference
+    /// data for the release patchline. Search defaults to this build when
+    /// the LeftNav is on Release. `None` until the user mounts a release
+    /// build for the first time.
+    pub active_release_build: Option<String>,
+    /// build_id of the active build for the pre-release patchline.
+    pub active_pre_release_build: Option<String>,
+}
+
+impl Default for AtlasConfig {
+    fn default() -> Self {
+        Self {
+            hytale_release_path: None,
+            hytale_prerelease_path: None,
+            first_run_skipped: false,
+            active_branch: Slot::default(),
+            central_repo: default_central_repo(),
+            active_release_build: None,
+            active_pre_release_build: None,
+        }
+    }
+}
+
+/// Default central repository for reference-data releases. Test repo while the
+/// pipeline beds in; flip to `HytaleModding/atlas` (or wherever HM hosts) for
+/// the public release.
+pub fn default_central_repo() -> String {
+    "Vibe-Theory/atlastest".to_string()
 }
 
 /// Result of validating a candidate Hytale install directory.

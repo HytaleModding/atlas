@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Toaster, toast } from "sonner";
 import { LeftNav } from "./LeftNav";
@@ -6,16 +6,20 @@ import { StatusBar } from "./StatusBar";
 import { RightPanel } from "./RightPanel";
 import { FirstRunModal } from "./FirstRunModal";
 import { FeedbackModal } from "./FeedbackModal";
+import { PageErrorBoundary } from "./PageErrorBoundary";
 import { SearchPage } from "@/pages/SearchPage";
 import { IndexCatalog } from "@/pages/IndexCatalog";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { DiffReportPage } from "@/pages/DiffReport";
 import { useConfigStore } from "@/state/configStore";
 import { useBranchStore } from "@/state/branchStore";
 import { useOverviewStore } from "@/state/overviewStore";
 import { usePatcherStore } from "@/state/patcherStore";
 import { useIndexStore } from "@/state/indexStore";
 import { useFetchStore } from "@/state/fetchStore";
+import { useProjectStore } from "@/state/projectStore";
 import { useNavStore } from "@/state/navStore";
+import { usePinsStore } from "@/state/pinsStore";
 import { needsFirstRun } from "@/lib/config";
 import type { Slot } from "@/lib/patcher";
 
@@ -43,14 +47,22 @@ export function AppShell() {
   const subscribePatcher = usePatcherStore((s) => s.subscribe);
   const subscribeIndex = useIndexStore((s) => s.subscribe);
   const subscribeFetch = useFetchStore((s) => s.subscribe);
+  const subscribeProjects = useProjectStore((s) => s.subscribe);
+  const refreshProjects = useProjectStore((s) => s.refresh);
   const refreshIndexOverview = useIndexStore((s) => s.refreshOverview);
   const startIndex = useIndexStore((s) => s.start);
+  const refreshPins = usePinsStore((s) => s.refresh);
   const page = useNavStore((s) => s.page);
+  const refreshCatalog = useFetchStore((s) => s.refreshCatalog);
+  const checkForUpdates = useFetchStore((s) => s.checkForUpdates);
+  const startFetch = useFetchStore((s) => s.start);
 
-  // Boot: load config once.
+  // Boot: load config + pin snapshot once. Pins are independent of
+  // config so they can hydrate in parallel.
   useEffect(() => {
     void refreshConfig();
-  }, [refreshConfig]);
+    void refreshPins();
+  }, [refreshConfig, refreshPins]);
 
   // Once config is in, hydrate branch state + pull the first overview.
   useEffect(() => {
@@ -58,8 +70,63 @@ export function AppShell() {
       hydrateBranch();
       void refreshOverview();
       void refreshIndexOverview();
+      void refreshCatalog();
     }
-  }, [snapshot, branchHydrated, hydrateBranch, refreshOverview, refreshIndexOverview]);
+  }, [snapshot, branchHydrated, hydrateBranch, refreshOverview, refreshIndexOverview, refreshCatalog]);
+
+  // After the catalog snapshot lands, ask the central repo what the
+  // newest published builds are and pull anything we don't already have.
+  // The user never has to click "Check for updates" — Atlas ships
+  // pre-wired to the central index repo and just keeps current. We
+  // skip pre-release auto-fetch when no pre-release Hytale install is
+  // detected so users without that patchline enabled don't get data
+  // they can't legally use; the BranchCard surfaces the install guide
+  // for that case instead.
+  const autoFetchRanRef = useRef(false);
+  useEffect(() => {
+    if (autoFetchRanRef.current) return;
+    if (!snapshot) return;
+    // Wait until the user has satisfied the entitlement gate (set
+    // their Hytale install path at least once). Otherwise this fires
+    // behind the FirstRunModal.
+    if (needsFirstRun(snapshot)) return;
+    autoFetchRanRef.current = true;
+    void (async () => {
+      // Refresh the local catalog first so the "already have it"
+      // check against `mounted` doesn't race the boot-time refresh.
+      await refreshCatalog();
+      await checkForUpdates();
+      const fetchState = useFetchStore.getState();
+      const mountedNow = fetchState.mounted;
+      const resolutions = fetchState.remoteResolutions;
+      const hasPrereleaseInstall = !!snapshot.detected_prerelease_path;
+
+      for (const slot of ["release", "pre-release"] as Slot[]) {
+        if (slot === "pre-release" && !hasPrereleaseInstall) continue;
+        const resolution = resolutions[slot];
+        if (!resolution) continue;
+        const alreadyMounted = mountedNow.some(
+          (m) => m.build_id === resolution.build_id,
+        );
+        if (alreadyMounted) continue;
+        try {
+          await startFetch({
+            buildId: resolution.build_id,
+            url: resolution.url,
+          });
+        } catch (err) {
+          // Surface via toast but keep going for the other slot; the
+          // user can retry from IndexCatalog.
+          toast.error(
+            slot === "release"
+              ? "Couldn't get Release data"
+              : "Couldn't get Pre-release data",
+            { description: String(err) },
+          );
+        }
+      }
+    })();
+  }, [snapshot, checkForUpdates, startFetch, refreshCatalog]);
 
   // Subscribe to decompile + index events for the whole session. The
   // auto-kick listener runs *in addition* to the patcherStore subscriber
@@ -69,6 +136,7 @@ export function AppShell() {
     let unlistenPatcher: (() => void) | undefined;
     let unlistenIndex: (() => void) | undefined;
     let unlistenFetch: (() => void) | undefined;
+    let unlistenProjects: (() => void) | undefined;
     let unlistenAutoKick: (() => void) | undefined;
     let unlistenIndexDoneToast: (() => void) | undefined;
 
@@ -76,6 +144,8 @@ export function AppShell() {
       unlistenPatcher = await subscribePatcher();
       unlistenIndex = await subscribeIndex();
       unlistenFetch = await subscribeFetch();
+      unlistenProjects = await subscribeProjects();
+      void refreshProjects();
 
       unlistenAutoKick = await listen<{ slot: Slot; outputDir: string }>(
         "decompile:done",
@@ -117,10 +187,19 @@ export function AppShell() {
       unlistenPatcher?.();
       unlistenIndex?.();
       unlistenFetch?.();
+      unlistenProjects?.();
       unlistenAutoKick?.();
       unlistenIndexDoneToast?.();
     };
-  }, [subscribePatcher, subscribeIndex, subscribeFetch, refreshOverview, startIndex]);
+  }, [
+    subscribePatcher,
+    subscribeIndex,
+    subscribeFetch,
+    subscribeProjects,
+    refreshProjects,
+    refreshOverview,
+    startIndex,
+  ]);
 
   const firstRun = snapshot !== null && needsFirstRun(snapshot);
 
@@ -149,12 +228,18 @@ export function AppShell() {
                 Retry
               </button>
             </div>
-          ) : page === "catalog" ? (
-            <IndexCatalog />
-          ) : page === "settings" ? (
-            <SettingsPage />
           ) : (
-            <SearchPage />
+            <PageErrorBoundary key={page}>
+              {page === "catalog" ? (
+                <IndexCatalog />
+              ) : page === "settings" ? (
+                <SettingsPage />
+              ) : page === "diff" ? (
+                <DiffReportPage />
+              ) : (
+                <SearchPage />
+              )}
+            </PageErrorBoundary>
           )}
         </main>
         <RightPanel />

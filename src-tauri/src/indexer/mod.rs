@@ -15,6 +15,7 @@
 
 pub mod analyzer;
 pub mod chunker;
+pub mod embed_cache;
 pub mod hm_docs;
 pub mod hypixel_docs;
 pub mod metadata;
@@ -42,6 +43,7 @@ use crate::config::Slot;
 use crate::embedder::Embedder;
 use crate::lance::{self, ChunkRow, LanceStore};
 use analyzer::{CodeTokenizer, CODE_TOKENIZER};
+use embed_cache::{EmbedCache, NullCache};
 use metadata::{format_iso8601, IndexMetadata};
 use schema::{build as build_schema, IndexFields, SourceType};
 use status::IndexerPhase;
@@ -54,6 +56,17 @@ pub fn index_dir_for(data_dir: &Path, slot: Slot) -> PathBuf {
     data_dir
         .join("indexes")
         .join("tantivy")
+        .join(slot.as_str())
+}
+
+/// Directory holding the unpacked Hypixel Javadoc HTML tree for one
+/// slot. Mirrored out of the artifact's `javadocs/` payload at mount
+/// time so the inline-Javadoc resolver and `read_source` command can
+/// serve HTML straight from disk without round-tripping to the network.
+pub fn javadocs_dir_for(data_dir: &Path, slot: Slot) -> PathBuf {
+    data_dir
+        .join("indexes")
+        .join("javadocs")
         .join(slot.as_str())
 }
 
@@ -110,6 +123,22 @@ pub async fn run(
     // tagged `source_type = "hypixel_doc"`. CI mirrors via `wget`; the
     // desktop app always passes `None`.
     hypixel_docs_dir: Option<PathBuf>,
+    // Optional content-addressed embedding cache. When `Some`, chunk
+    // texts whose hash hits in the cache skip the embedder; misses
+    // are embedded in one batch and written back. The desktop app
+    // passes `None` (every desktop build is a one-shot, the cost of
+    // disk hit/miss bookkeeping outweighs the savings); CI passes a
+    // `DiskCache` so the release-then-pre-release matrix amortises
+    // BGE-small wall time across runs.
+    embed_cache: Option<Arc<dyn EmbedCache>>,
+    // Override the `source_type` tag baked into Java-pass chunks.
+    // `None` (the default) means `SourceType::Source` - i.e. Hytale
+    // decompiled source. Project mode (`crate::project::index`) passes
+    // `Some(SourceType::ProjectSource)` so the UI stripe + diff tracker
+    // can tell the corpora apart in a mixed search hit list. Doesn't
+    // affect the HM-docs / Hypixel-docs passes - those always tag with
+    // their own source_type regardless.
+    java_source_type: Option<SourceType>,
 ) -> Result<()> {
     if !decompile_dir.is_dir() {
         return Err(anyhow!(
@@ -151,6 +180,9 @@ pub async fn run(
     let summarizer_for_task = summarizer_opt.clone();
     let hm_docs_for_task = hm_docs_dir.clone();
     let hypixel_docs_for_task = hypixel_docs_dir.clone();
+    let cache_for_task: Arc<dyn EmbedCache> =
+        embed_cache.unwrap_or_else(|| Arc::new(NullCache));
+    let java_source_type_for_task = java_source_type.unwrap_or(SourceType::Source);
     let rt_handle = tokio::runtime::Handle::current();
     let docs = tokio::task::spawn_blocking(move || {
         build_index(
@@ -165,6 +197,8 @@ pub async fn run(
             summarizer_for_task,
             hm_docs_for_task.as_deref(),
             hypixel_docs_for_task.as_deref(),
+            cache_for_task,
+            java_source_type_for_task,
         )
     })
     .await
@@ -371,6 +405,12 @@ fn add_section_blocking(
     let mut pending: Vec<PendingChunk> = Vec::with_capacity(EMBED_BATCH_CHUNKS);
     let mut chunks_written = 0u64;
     let mut docs_added = 0u64;
+    // add-section is the surgical re-ingest path - small (typically
+    // ~150 docs), already a small fraction of full-build time. Skip
+    // the cache here so we don't touch the on-disk cache during a
+    // user-initiated incremental refresh; the file cache is intended
+    // for CI's release+pre-release matrix.
+    let null_cache = NullCache;
 
     match source_type {
         SourceType::HmDoc => {
@@ -412,6 +452,7 @@ fn add_section_blocking(
                     sink,
                     current,
                     total,
+                    &null_cache,
                 )?;
             }
             flush_if_full(
@@ -427,6 +468,7 @@ fn add_section_blocking(
                 sink,
                 current,
                 total,
+                &null_cache,
             )?;
         }
         other => {
@@ -489,6 +531,7 @@ struct PendingChunk {
 /// chunk. Dual-writes each chunk to LanceDB with a BGE-small embedding
 /// so semantic search has a vector store to query.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn build_index(
     sink: &dyn ProgressSink,
     slot: Slot,
@@ -501,6 +544,11 @@ fn build_index(
     summarizer_opt: Option<Arc<dyn summarizer::Summarizer>>,
     hm_docs_dir: Option<&Path>,
     hypixel_docs_dir: Option<&Path>,
+    embed_cache: Arc<dyn EmbedCache>,
+    // Tag baked into Java-pass chunks. `Source` for Hytale decompile;
+    // `ProjectSource` for user mod source. HM-docs / Hypixel-docs passes
+    // ignore this and tag with their own discriminators.
+    java_source_type: SourceType,
 ) -> Result<u64> {
     // Fresh directory each build. Tantivy supports incremental writes, but
     // the contract is "decompile changed -> rebuild from scratch."
@@ -700,7 +748,7 @@ fn build_index(
             };
             pending.push(PendingChunk {
                 rel_path: file.rel_path.clone(),
-                source_type: SourceType::Source.as_str(),
+                source_type: java_source_type.as_str(),
                 package: file.package.clone(),
                 fqn: doc_fqn,
                 filename: file.filename.clone(),
@@ -728,6 +776,7 @@ fn build_index(
                 sink,
                 current,
                 total_files,
+                embed_cache.as_ref(),
             )?;
         }
         files_indexed += 1;
@@ -781,6 +830,7 @@ fn build_index(
                 sink,
                 current,
                 total_files,
+                embed_cache.as_ref(),
             )?;
         }
     }
@@ -835,6 +885,7 @@ fn build_index(
                 sink,
                 current,
                 total_files,
+                embed_cache.as_ref(),
             )?;
         }
     }
@@ -853,6 +904,7 @@ fn build_index(
         sink,
         current,
         total_files,
+        embed_cache.as_ref(),
     )?;
 
     // Commit.
@@ -903,6 +955,7 @@ fn flush_if_full(
     sink: &dyn ProgressSink,
     current: usize,
     total: usize,
+    embed_cache: &dyn EmbedCache,
 ) -> Result<usize> {
     let should_flush = if force {
         !pending.is_empty()
@@ -913,7 +966,16 @@ fn flush_if_full(
         return Ok(0);
     }
     let n = pending.len();
-    flush_batch(pending, slot, fields, writer, embedder, lance_store, rt)?;
+    flush_batch(
+        pending,
+        slot,
+        fields,
+        writer,
+        embedder,
+        lance_store,
+        rt,
+        embed_cache,
+    )?;
     *chunks_written += n as u64;
     sink.emit(IndexEvent::Progress {
         current,
@@ -926,6 +988,13 @@ fn flush_if_full(
 /// Embed the pending chunks in one fastembed call, then write them to
 /// both stores. Tantivy is append-only via the writer; Lance takes one
 /// Arrow RecordBatch per flush.
+///
+/// When `embed_cache` is non-null, every chunk text's content-hash is
+/// looked up first; only the misses are sent to the embedder, and their
+/// resulting vectors are written back to the cache. This is the primary
+/// cost lever for CI's release+pre-release matrix - the second build
+/// hits cache for nearly every shared chunk.
+#[allow(clippy::too_many_arguments)]
 fn flush_batch(
     pending: &mut Vec<PendingChunk>,
     slot: Slot,
@@ -934,24 +1003,69 @@ fn flush_batch(
     embedder: &dyn Embedder,
     lance_store: &LanceStore,
     rt: &tokio::runtime::Handle,
+    embed_cache: &dyn EmbedCache,
 ) -> Result<()> {
     if pending.is_empty() {
         return Ok(());
     }
 
-    // Embed all pending texts in one call. BGE-small batches internally;
-    // fastembed returns vectors in input order.
-    let texts: Vec<&str> = pending.iter().map(|c| c.text.as_str()).collect();
-    let vectors = embedder
-        .embed_batch(&texts)
-        .context("embedding chunk batch")?;
-    if vectors.len() != pending.len() {
+    // Partition pending chunks into cached (vector resolved up-front)
+    // and uncached (must hit the embedder). `cached_vectors[i]` is
+    // `Some(v)` if `pending[i]` was already in the cache; otherwise the
+    // index is recorded in `miss_indices` so we can splice the embedder
+    // results back into the original positions.
+    let chunker = metadata::CHUNKER_VERSION;
+    let embedder_id = metadata::EMBEDDER_ID;
+    let mut cached_vectors: Vec<Option<Vec<f32>>> = Vec::with_capacity(pending.len());
+    let mut miss_indices: Vec<usize> = Vec::new();
+    let mut miss_keys: Vec<String> = Vec::new();
+    let mut miss_texts: Vec<&str> = Vec::new();
+    for (i, chunk) in pending.iter().enumerate() {
+        let key = embed_cache::cache_key(&chunk.text, chunker, embedder_id);
+        if let Some(v) = embed_cache.get(&key) {
+            cached_vectors.push(Some(v));
+        } else {
+            cached_vectors.push(None);
+            miss_indices.push(i);
+            miss_keys.push(key);
+            miss_texts.push(chunk.text.as_str());
+        }
+    }
+
+    // Embed only the cache misses. Skip the embedder entirely if the
+    // whole batch hit cache - on the second pass of a CI matrix this
+    // is the common case for stable chunks.
+    let mut fresh_vectors: Vec<Vec<f32>> = if miss_texts.is_empty() {
+        Vec::new()
+    } else {
+        embedder
+            .embed_batch(&miss_texts)
+            .context("embedding chunk batch")?
+    };
+    if fresh_vectors.len() != miss_indices.len() {
         return Err(anyhow!(
             "embedder returned {} vectors for {} inputs",
-            vectors.len(),
-            pending.len()
+            fresh_vectors.len(),
+            miss_indices.len()
         ));
     }
+
+    // Splice fresh vectors back into the per-chunk slot, and write
+    // them through to the cache. Drain in order to avoid an extra
+    // clone per vector.
+    for (key_idx, target_idx) in miss_indices.iter().enumerate() {
+        let v = std::mem::take(&mut fresh_vectors[key_idx]);
+        embed_cache.put(&miss_keys[key_idx], &v);
+        cached_vectors[*target_idx] = Some(v);
+    }
+
+    // After splicing, every slot must be Some - bug if not.
+    let vectors: Vec<Vec<f32>> = cached_vectors
+        .into_iter()
+        .map(|opt| {
+            opt.ok_or_else(|| anyhow!("internal: vector slot left empty after embed splice"))
+        })
+        .collect::<Result<_>>()?;
 
     // Write Tantivy docs.
     for chunk in pending.iter() {

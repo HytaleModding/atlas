@@ -1,28 +1,28 @@
 //! `atlas-build`: headless CLI for the central index builder.
 //!
-//! Subcommands cover the full "decompile in, artifact out" pipeline:
+//! Subcommands cover the full "JAR in, artifact out" pipeline:
 //!
-//! - `keygen`: generate an Ed25519 keypair for manifest signing.
-//! - `index` : walk a decompile tree and emit `tantivy/`, `lance/`,
-//! `symbols.sqlite` into a staging directory.
-//! - `pack` : take a staging directory (containing `tantivy/`,
-//! `lance/`, `symbols.sqlite`) plus manifest metadata,
-//! emit a signed `.tar.zst`. The artifact never ships the
-//! decompile tree - clients run Vineflower locally to
-//! reconstruct source for preview / `get_source`.
-//! - `verify`: open a `.tar.zst` + optional pubkey, check layout +
-//! signature + digests. Used by CI as the determinism
-//! guard.
+//! - `keygen`   : generate an Ed25519 keypair for manifest signing.
+//! - `decompile`: cache Vineflower, extract a server JAR, run Vineflower
+//!                into a decompile tree of `.java` files. Writes a
+//!                sidecar `atlas-decompile-meta.json` with the JAR's
+//!                Implementation-Version / patchline / revision.
+//! - `index`    : walk a decompile tree and emit `tantivy/`, `lance/`,
+//!                `symbols.sqlite` into a staging directory.
+//! - `pack`     : take a staging directory (containing `tantivy/`,
+//!                `lance/`, `symbols.sqlite`) plus manifest metadata,
+//!                emit a signed `.tar.zst`. The artifact never ships the
+//!                decompile tree - clients run Vineflower locally to
+//!                reconstruct source for preview / `get_source`.
+//! - `verify`   : open a `.tar.zst` + optional pubkey, check layout +
+//!                signature + digests. Used by CI as the determinism
+//!                guard.
 //!
-//! Typical local loop:
-//! 1. `atlas-build index --decompile <src> --staging <dst>`
-//! 2. `atlas-build pack --staging <dst> --signing-key <key> ...`
-//! 3. `atlas-build verify <artifact>`
-//!
-//! `index` does NOT yet run Vineflower itself. The caller is responsible
-//! for producing the decompile tree (the desktop app already does this;
-//! a future `atlas-build decompile <jar>` subcommand will close the
-//! loop end-to-end).
+//! Typical CI loop:
+//! 1. `atlas-build decompile --jar <jar> --out work/decompile`
+//! 2. `atlas-build index --decompile work/decompile --staging work/staging`
+//! 3. `atlas-build pack --staging work/staging --signing-key <key> ...`
+//! 4. `atlas-build verify <artifact>`
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -40,6 +40,7 @@ use atlas_lib::fetcher::signing::{
     verify_manifest,
 };
 use atlas_lib::indexer::chunker;
+use atlas_lib::indexer::embed_cache::{DiskCache, EmbedCache};
 use atlas_lib::indexer::metadata::{CHUNKER_VERSION, EMBEDDER_ID, MIN_CLIENT_VERSION, SCHEMA_VERSION};
 use atlas_lib::indexer::summarizer::{
     self, AnthropicSummarizer, StubSummarizer, Summarizer,
@@ -79,6 +80,40 @@ enum Command {
         out_private: PathBuf,
         #[arg(long)]
         out_public: PathBuf,
+    },
+
+ /// Run Vineflower against a Hytale server JAR and emit a decompile
+ /// tree of `.java` files. Closes the "JAR in, source tree out" half
+ /// of the central pipeline so CI can hand the result straight to
+ /// `index`. Writes `<out>/atlas-decompile-meta.json` containing the
+ /// JAR's `Implementation-Version`, `Implementation-Patchline`, and
+ /// `Implementation-Revision-Id` so downstream steps can pass them to
+ /// `pack` without re-parsing the JAR.
+    Decompile {
+ /// Path to `HytaleServer.jar` (or any compatible Hytale server JAR).
+        #[arg(long)]
+        jar: PathBuf,
+
+ /// Output directory for the decompile tree. Vineflower writes the
+ /// Java package tree directly under this path. Created if missing;
+ /// an existing tree is left in place (Vineflower will overwrite
+ /// individual files but not prune stale ones - CI workflows
+ /// should pass a fresh directory).
+        #[arg(long)]
+        out: PathBuf,
+
+ /// Override the intermediate `classes/` extraction directory.
+ /// Defaults to `<out>.classes` as a sibling of the output. Safe
+ /// to delete after `decompile` finishes; only the `--out` tree
+ /// is needed by `index`.
+        #[arg(long)]
+        classes_dir: Option<PathBuf>,
+
+ /// Shared cache root for the Vineflower JAR. Same semantics as
+ /// `index --cache-root`; the JAR is cached at
+ /// `<cache-root>/tools/vineflower-<version>.jar`.
+        #[arg(long)]
+        cache_root: Option<PathBuf>,
     },
 
  /// Walk a decompile tree and write Tantivy + Lance + symbols into a
@@ -142,21 +177,26 @@ enum Command {
         #[arg(long, default_value_t = false)]
         hm_docs_fetch: bool,
 
- /// Path to a directory of mirrored Hypixel Javadoc HTML (the
- /// release.server.docs.hytale.com / prerelease.* trees). CI is
- /// expected to mirror via `wget --mirror --no-parent
- /// --no-host-directories` before invoking this command. Each
- /// recognised class page is added as `source_type = "hypixel_doc"`.
+ /// Pre-mirrored Hypixel Javadoc HTML tree to use instead of
+ /// auto-fetching. When omitted, the indexer fetches from the
+ /// slot-appropriate host automatically (see `--no-hypixel-docs`
+ /// for the opt-out). Path layout matches what
+ /// `wget --mirror --no-parent --no-host-directories` produces.
+ /// Each recognised class page is added as
+ /// `source_type = "hypixel_doc"` AND copied into
+ /// `<staging>/javadocs/` so the packed artifact ships the HTML
+ /// for client-side inline-Javadoc rendering.
         #[arg(long)]
         hypixel_docs: Option<PathBuf>,
 
- /// Convenience: fetch Hypixel Javadocs from these hosts into a
- /// cache directory before walking. Repeat to pull both
- /// release + prerelease. When given alongside `--hypixel-docs`,
- /// the cache directory is `<hypixel-docs>/<host-slug>/`.
- /// Local-dev only - production CI should use `wget --mirror`.
-        #[arg(long = "hypixel-docs-fetch")]
-        hypixel_docs_fetch: Vec<String>,
+ /// Skip Hypixel Javadocs entirely. The default behaviour is to
+ /// fetch from `release.server.docs.hytale.com` (release slot) or
+ /// `prerelease.server.docs.hytale.com` (pre-release slot) and ship
+ /// the HTML inside the artifact so inline-Javadoc cards work for
+ /// every client. This flag exists for tests and offline rebuilds
+ /// where docs aren't reachable.
+        #[arg(long, default_value_t = false)]
+        no_hypixel_docs: bool,
 
  /// Root for shared caches (embedder model, HM docs clone,
  /// Hypixel Javadoc mirror). Survives across staging dirs so
@@ -167,6 +207,16 @@ enum Command {
  /// `javadocs/<host-slug>/`.
         #[arg(long)]
         cache_root: Option<PathBuf>,
+
+ /// Optional content-addressed embedding cache. When set, chunk
+ /// texts hashed to a key already on disk skip BGE-small entirely;
+ /// misses are embedded in one batch and written back. Designed
+ /// for the CI release+pre-release matrix where the two builds
+ /// share most chunks - second run drops embedding wall time by
+ /// 80%+. Cache key is sha256(text + chunker_version + embedder_id),
+ /// so bumping either constant invalidates without manual eviction.
+        #[arg(long)]
+        embedding_cache: Option<PathBuf>,
     },
 
  /// Surgically refresh a single section inside an existing staging
@@ -416,6 +466,12 @@ fn main() -> Result<()> {
             out_private,
             out_public,
         } => cmd_keygen(&out_private, &out_public),
+        Command::Decompile {
+            jar,
+            out,
+            classes_dir,
+            cache_root,
+        } => cmd_decompile(&jar, &out, classes_dir.as_deref(), cache_root.as_deref()),
         Command::Index {
             decompile,
             staging,
@@ -426,8 +482,9 @@ fn main() -> Result<()> {
             hm_docs,
             hm_docs_fetch,
             hypixel_docs,
-            hypixel_docs_fetch,
+            no_hypixel_docs,
             cache_root,
+            embedding_cache,
         } => cmd_index(
             &decompile,
             &staging,
@@ -438,8 +495,9 @@ fn main() -> Result<()> {
             hm_docs.as_deref(),
             hm_docs_fetch,
             hypixel_docs.as_deref(),
-            &hypixel_docs_fetch,
+            no_hypixel_docs,
             cache_root.as_deref(),
+            embedding_cache.as_deref(),
         ),
         Command::AddSection {
             staging,
@@ -538,6 +596,7 @@ impl ProgressSink for StdoutSink {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_index(
     decompile: &Path,
     staging: &Path,
@@ -548,8 +607,9 @@ fn cmd_index(
     hm_docs: Option<&Path>,
     hm_docs_fetch: bool,
     hypixel_docs: Option<&Path>,
-    hypixel_docs_fetch: &[String],
+    no_hypixel_docs: bool,
     cache_root: Option<&Path>,
+    embedding_cache: Option<&Path>,
 ) -> Result<()> {
     if !decompile.is_dir() {
         bail!(
@@ -637,21 +697,30 @@ fn cmd_index(
         .build()
         .context("building tokio runtime")?;
 
- // Optional in-process Javadoc mirror - only fires when the user
- // passed `--hypixel-docs-fetch <host>` (one or more times). Pulls
- // each host into a sub-dir of the cache root so release + prerelease
- // coexist. Production CI should `wget --mirror` instead and just
- // point `--hypixel-docs` at the result.
-    let hypixel_docs_owned = if !hypixel_docs_fetch.is_empty() {
-        let cache_root = hypixel_docs
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| resolved_cache_root.join("javadocs"));
+ // Hypixel Javadoc resolution. Default behaviour: auto-fetch from the
+ // slot-appropriate host so every artifact ships with the docs needed
+ // for inline-Javadoc rendering on the client. `--no-hypixel-docs`
+ // exists for offline rebuilds + tests; `--hypixel-docs <path>` lets a
+ // pre-mirrored tree win when the caller has one (CI with wget mirror,
+ // etc.). The chosen tree is BOTH walked by the indexer AND copied into
+ // `<staging>/javadocs/` so the packer ships the HTML and the client
+ // never has to hit the network.
+    let hypixel_docs_owned: Option<PathBuf> = if no_hypixel_docs {
+        println!("hypixel docs:     skipped (--no-hypixel-docs)");
+        None
+    } else if let Some(p) = hypixel_docs {
+        Some(p.to_path_buf())
+    } else {
+        let host = match slot {
+            Slot::Release => "https://release.server.docs.hytale.com",
+            Slot::PreRelease => "https://prerelease.server.docs.hytale.com",
+        };
+        let cache_root = resolved_cache_root.join("javadocs");
         fs::create_dir_all(&cache_root)
             .with_context(|| format!("creating hypixel cache {}", cache_root.display()))?;
-        let host_refs: Vec<&str> = hypixel_docs_fetch.iter().map(String::as_str).collect();
         let results = rt
             .block_on(atlas_lib::indexer::hypixel_docs::fetch_many_to_cache(
-                &host_refs,
+                &[host],
                 &cache_root,
             ))
             .context("fetching Hypixel Javadocs")?;
@@ -662,10 +731,25 @@ fn cmd_index(
                 sub.display()
             );
         }
-        Some(cache_root)
-    } else {
-        hypixel_docs.map(|p| p.to_path_buf())
+        // Hand the host-specific subdir to the indexer, NOT the parent
+        // `<cache>/javadocs/`. The parent may already contain the other
+        // slot's mirror from a prior build; passing the subdir guarantees
+        // this artifact only carries this slot's docs and the indexer
+        // only walks this slot's HTML.
+        results.into_iter().next().map(|(sub, _)| sub)
     };
+
+ // Copy the resolved Javadoc tree into the staging directory so the
+ // packer (which walks `<staging>/` recursively) ships every HTML page
+ // inside the signed artifact. This is what makes inline-Javadoc cards
+ // a first-class shipped feature instead of a "works on the dev box"
+ // accident.
+    if let Some(src) = hypixel_docs_owned.as_deref() {
+        let dest = staging.join("javadocs");
+        copy_dir_recursive(src, &dest)
+            .with_context(|| format!("copying javadocs into staging at {}", dest.display()))?;
+        println!("javadocs staged → {}", dest.display());
+    }
 
  // Resolve the effective HM docs path. Explicit `--hm-docs` wins;
  // otherwise `--hm-docs-fetch` shallow-clones the live repo into a
@@ -679,6 +763,23 @@ fn cmd_index(
         None
     };
 
+    // Optional content-addressed embedding cache. CI passes
+    // `--embedding-cache <dir>` plus `actions/cache@v4` so the
+    // release-then-pre-release matrix amortises BGE-small wall time
+    // across runs. Local dev passes nothing → NullCache is used.
+    let embed_cache_arc: Option<Arc<dyn EmbedCache>> = match embedding_cache {
+        Some(path) => {
+            fs::create_dir_all(path).with_context(|| {
+                format!("creating embedding cache dir {}", path.display())
+            })?;
+            let dc = DiskCache::open(path, atlas_lib::embedder::EMBEDDING_DIM)
+                .with_context(|| format!("opening embedding cache at {}", path.display()))?;
+            println!("embedding cache:  {}", path.display());
+            Some(Arc::new(dc))
+        }
+        None => None,
+    };
+
     rt.block_on(indexer::run(
         embedder,
         slot,
@@ -689,6 +790,8 @@ fn cmd_index(
         summarizer_arc,
         effective_hm_docs,
         hypixel_docs_owned,
+        embed_cache_arc,
+        None, // central pipeline always tags as `Source`
     ))
     .context("indexer run failed")?;
 
@@ -846,6 +949,155 @@ fn cmd_keygen(out_private: &Path, out_public: &Path) -> Result<()> {
     println!("wrote private key → {}", out_private.display());
     println!("wrote public key  → {}", out_public.display());
     println!("fingerprint       → {fp}");
+    Ok(())
+}
+
+/// Stdout progress sink for the JAR-extract phase. Throttled to roughly
+/// every 5% so a 50k-entry JAR doesn't spam CI logs.
+struct ExtractStdoutSink {
+    last_pct: std::sync::Mutex<u32>,
+}
+
+impl atlas_lib::patcher::extract::ProgressSink for ExtractStdoutSink {
+    fn report(&self, current: usize, total: usize) {
+        if total == 0 {
+            return;
+        }
+        let pct = ((current as u64 * 100) / total as u64) as u32;
+        let mut last = self.last_pct.lock().unwrap();
+        if pct >= *last + 5 || current == total {
+            *last = pct;
+            println!("extract: {current}/{total} ({pct}%)");
+        }
+    }
+}
+
+fn cmd_decompile(
+    jar: &Path,
+    out: &Path,
+    classes_dir: Option<&Path>,
+    cache_root: Option<&Path>,
+) -> Result<()> {
+    use atlas_lib::patcher::{decompile as patcher_decompile, extract, java, version, vineflower};
+
+    if !jar.is_file() {
+        bail!("jar path is not a file: {}", jar.display());
+    }
+
+    let resolved_cache_root = resolve_cache_root(cache_root);
+    let tools_dir = resolved_cache_root.join("tools");
+
+ // Default classes dir is `<out>.classes` so callers don't need to
+ // pick one. Lives next to (not inside) the decompile output so a
+ // simple `rm -rf <out>.classes` cleans up afterwards without
+ // touching the source tree.
+    let classes_owned: PathBuf = match classes_dir {
+        Some(p) => p.to_path_buf(),
+        None => {
+            let mut s = out.as_os_str().to_owned();
+            s.push(".classes");
+            PathBuf::from(s)
+        }
+    };
+
+    fs::create_dir_all(out)
+        .with_context(|| format!("creating decompile output dir {}", out.display()))?;
+    fs::create_dir_all(&classes_owned)
+        .with_context(|| format!("creating classes dir {}", classes_owned.display()))?;
+
+    println!("jar:            {}", jar.display());
+    println!("out:            {}", out.display());
+    println!("classes:        {}", classes_owned.display());
+    println!("cache root:     {}", resolved_cache_root.display());
+
+ // Capture JAR fingerprint up front - same fields the desktop flow
+ // persists in SlotMetadata. Written to a sidecar JSON at the end
+ // so the workflow can `jq` the values into `pack` flags.
+    let jar_meta = fs::metadata(jar)
+        .with_context(|| format!("stat {}", jar.display()))?;
+    let jar_size = jar_meta.len();
+    let jar_mtime = jar_meta
+        .modified()
+        .unwrap_or_else(|_| std::time::SystemTime::now());
+
+    let hytale_version = version::read_from_jar(jar)
+        .with_context(|| format!("reading version from {}", jar.display()))?;
+    println!("hytale version: {}", hytale_version.implementation_version);
+    if let Some(p) = &hytale_version.patchline {
+        println!("hytale patchline: {p}");
+    }
+    if let Some(r) = &hytale_version.revision_id {
+        println!("hytale revision:  {r}");
+    }
+
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_name("atlas-decompile")
+        .build()
+        .context("building tokio runtime")?;
+
+ // 1. Vineflower JAR (cached, hash-verified).
+    println!("phase: ensure-vineflower");
+    let vineflower_jar = rt
+        .block_on(vineflower::ensure_vineflower_at(&tools_dir))
+        .context("ensuring Vineflower JAR")?;
+
+ // 2. Java >= 17 on PATH.
+    println!("phase: detect-java");
+    let java_path = rt
+        .block_on(java::ensure_java())
+        .context("detecting Java 17+ on PATH")?;
+
+ // 3. Extract classes from the server JAR.
+    println!("phase: extract");
+    let sink = ExtractStdoutSink {
+        last_pct: std::sync::Mutex::new(0),
+    };
+    let jar_owned = jar.to_path_buf();
+    let classes_for_extract = classes_owned.clone();
+    // Wrap in an async block so `spawn_blocking` is invoked from
+    // inside the tokio runtime context — calling it as a bare argument
+    // to `block_on` panics with "no reactor running" because the
+    // arguments evaluate before `block_on` enters the runtime.
+    let extracted = rt
+        .block_on(async {
+            tokio::task::spawn_blocking(move || {
+                extract::extract_server_jar(&jar_owned, &classes_for_extract, &sink)
+            })
+            .await
+        })
+        .context("extract task panicked")??;
+    println!("extracted {extracted} class files");
+
+ // 4. Vineflower → out tree.
+    println!("phase: decompile");
+    rt.block_on(patcher_decompile::run_vineflower(
+        &java_path,
+        &vineflower_jar,
+        &classes_owned,
+        out,
+    ))
+    .context("running Vineflower")?;
+
+ // 5. Sidecar metadata. CI parses this with `jq` to feed
+ // `--hytale-impl-version` / `--hytale-patchline` to `pack`.
+    let meta = serde_json::json!({
+        "hytale_impl_version": hytale_version.implementation_version,
+        "hytale_patchline": hytale_version.patchline,
+        "hytale_revision_id": hytale_version.revision_id,
+        "vineflower_version": vineflower::VINEFLOWER_VERSION,
+        "jar_size": jar_size,
+        "jar_mtime": atlas_lib::patcher::metadata::format_iso8601(jar_mtime),
+        "decompiled_at": atlas_lib::patcher::metadata::format_iso8601(
+            std::time::SystemTime::now()
+        ),
+    });
+    let meta_path = out.join("atlas-decompile-meta.json");
+    fs::write(&meta_path, serde_json::to_string_pretty(&meta)?)
+        .with_context(|| format!("writing {}", meta_path.display()))?;
+    println!("wrote {}", meta_path.display());
+
+    println!("decompile ready at {}", out.display());
     Ok(())
 }
 
@@ -1463,4 +1715,29 @@ fn walk_staging(staging: &Path) -> Result<Vec<FileEntry>> {
         });
     }
     Ok(out)
+}
+
+/// Recursive directory copy used by `cmd_index` to stage the resolved
+/// Hypixel Javadoc tree under `<staging>/javadocs/` so the packer's
+/// `walk_staging` ships every HTML page inside the signed artifact.
+/// Mirrors the helper of the same name in `fetcher::mount` (kept
+/// duplicated rather than re-exported so this binary doesn't need a
+/// wider visibility surface from the library crate).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)
+        .with_context(|| format!("creating {}", dst.display()))?;
+    for entry in fs::read_dir(src)
+        .with_context(|| format!("reading {}", src.display()))?
+    {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            fs::copy(&from, &to)
+                .with_context(|| format!("copying {} → {}", from.display(), to.display()))?;
+        }
+    }
+    Ok(())
 }

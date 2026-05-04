@@ -31,7 +31,7 @@ import { useConfigStore } from "@/state/configStore";
 import { useIndexStore } from "@/state/indexStore";
 import { useFetchStore } from "@/state/fetchStore";
 import { useNavStore } from "@/state/navStore";
-import { FETCH_URL_BY_SLOT, fetchPhaseLabel } from "@/lib/fetcher";
+import { DEV_FETCH_URL_BY_SLOT, fetchPhaseLabel } from "@/lib/fetcher";
 import { validateHytalePath } from "@/lib/config";
 import { InstallPrereleaseGuide } from "./InstallPrereleaseGuide";
 import type { SlotIndexSummary } from "@/lib/indexer";
@@ -77,10 +77,12 @@ export function BranchCard() {
   const fetchStatus = useFetchStore((s) => s.status);
   const fetchActiveBuildId = useFetchStore((s) => s.activeBuildId);
   const fetchProgress = useFetchStore((s) => s.progress);
-  // In production builds the localhost dev URL is gated out; until the
-  // central resolver lands, the build id is empty and the fetch button
-  // simply has nothing to match against.
-  const fetchExpectedBuildId = FETCH_URL_BY_SLOT[slot]?.buildId ?? "";
+  // The dev-localhost URL is the only build id BranchCard can predict
+  // up-front; for central-resolver fetches the real id only becomes known
+  // after `index_resolve_remote` runs in the IndexCatalog. BranchCard's
+  // in-flight check therefore only knows about the dev path; production
+  // fetch progress lives in IndexCatalog.
+  const fetchExpectedBuildId = DEV_FETCH_URL_BY_SLOT[slot]?.buildId ?? "";
   const fetchingThisSlot =
     fetchActiveBuildId !== null && fetchActiveBuildId === fetchExpectedBuildId;
 

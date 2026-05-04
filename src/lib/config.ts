@@ -7,6 +7,12 @@ export type AtlasConfig = {
   hytale_prerelease_path: string | null;
   first_run_skipped: boolean;
   active_branch: Slot;
+  /** `owner/name` of the GitHub repo hosting reference-data releases. */
+  central_repo: string;
+  /** Build id the user picked as active for the release patchline. */
+  active_release_build: string | null;
+  /** Build id the user picked as active for the pre-release patchline. */
+  active_pre_release_build: string | null;
 };
 
 export type ConfigSnapshot = {

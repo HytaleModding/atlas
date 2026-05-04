@@ -6,6 +6,9 @@ import {
   Copy,
   ExternalLink,
   Hash,
+  Pin,
+  PinOff,
+  StickyNote,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +20,7 @@ import {
 } from "@/lib/indexer";
 import { useSearchStore } from "@/state/searchStore";
 import { useUIPrefsStore } from "@/state/uiPrefsStore";
+import { usePinsStore } from "@/state/pinsStore";
 import { useKeymap } from "@/lib/keymap";
 import { editorLabel, editorUrl } from "@/lib/editor";
 import { cn } from "@/lib/utils";
@@ -138,6 +142,7 @@ export function RightPanel() {
       />
       <TabBar />
       <Header hit={selected} onClose={closeActiveTab} />
+      <NoteCard hit={selected} />
       <SourceView hit={selected} />
     </aside>
   );
@@ -249,6 +254,7 @@ function Header({
               <BookOpen size={14} strokeWidth={1.75} />
             </button>
           )}
+          <PinButton hit={hit} />
           <IconBtn onClick={copyFqn} label="Copy fully-qualified name">
             <Copy size={14} strokeWidth={1.75} />
           </IconBtn>
@@ -277,6 +283,173 @@ function Header({
         <X size={14} strokeWidth={1.75} />
       </button>
     </header>
+  );
+}
+
+/** Toggles a `file` pin for the active hit. The pin's `build_id` is the
+ *  hit's slot string ("release" or "pre-release") so the LeftNav can
+ *  reconstruct a viewer hit when the user clicks a pinned row later.
+ *  The button is intentionally a single icon: pinned vs unpinned is
+ *  carried by the icon swap (Pin / PinOff), tooltip, and aria-pressed.
+ */
+function PinButton({ hit }: { hit: SearchHit }) {
+  const findPin = usePinsStore((s) => s.findPin);
+  const add = usePinsStore((s) => s.add);
+  const remove = usePinsStore((s) => s.remove);
+  // Subscribe to pins so the icon flips when the underlying list changes.
+  usePinsStore((s) => s.pins);
+  const existing = findPin("file", hit.path, hit.slot);
+  const pinned = existing !== null;
+
+  async function toggle() {
+    if (pinned && existing) {
+      await remove(existing.id);
+      toast.success("Unpinned");
+    } else {
+      await add("file", hit.path, hit.slot, hit.filename);
+      toast.success("Pinned");
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void toggle()}
+      title={pinned ? "Unpin" : "Pin"}
+      aria-label={pinned ? "Unpin file" : "Pin file"}
+      aria-pressed={pinned}
+      className={cn(
+        "rounded-sm p-1 hover:bg-bg-elevated",
+        pinned
+          ? "text-accent-primary"
+          : "text-fg-muted hover:text-fg-primary",
+      )}
+    >
+      {pinned ? (
+        <PinOff size={14} strokeWidth={1.75} />
+      ) : (
+        <Pin size={14} strokeWidth={1.75} />
+      )}
+    </button>
+  );
+}
+
+/** Renders the user's note for the active file, with an inline editor.
+ *  Hidden entirely when the file isn't pinned (you can't note an unpinned
+ *  file - notes always hang off a pin row). When pinned with no note,
+ *  shows a tiny "Add note" affordance. When pinned with a note, shows
+ *  the body in a bordered card matching the InlineJavadocBox visual,
+ *  with Edit / Delete actions. The editor is a plain textarea; save
+ *  clears empty bodies (which deletes the note row backend-side). */
+function NoteCard({ hit }: { hit: SearchHit | null }) {
+  const findPin = usePinsStore((s) => s.findPin);
+  const setNote = usePinsStore((s) => s.setNote);
+  // Subscribe to pin list so the card flips between empty/filled when
+  // pins or notes change elsewhere (e.g. unpinning from LeftNav).
+  usePinsStore((s) => s.pins);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const pin = hit ? findPin("file", hit.path, hit.slot) : null;
+
+  // Reset editor state when the active pin changes so an old draft from
+  // file A doesn't leak into file B.
+  useEffect(() => {
+    setEditing(false);
+    setDraft(pin?.note ?? "");
+  }, [pin?.id]);
+
+  if (!hit || !pin) return null;
+
+  async function save() {
+    if (!pin) return;
+    await setNote(pin.id, draft.trim());
+    setEditing(false);
+    toast.success(draft.trim() ? "Note saved" : "Note cleared");
+  }
+
+  function startEdit() {
+    setDraft(pin?.note ?? "");
+    setEditing(true);
+  }
+
+  if (editing) {
+    return (
+      <div className="border-b border-border-subtle bg-bg-base px-4 py-3">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={4}
+          autoFocus
+          placeholder="Write a note for this file…"
+          className={cn(
+            "w-full resize-y rounded-md border border-border-subtle bg-bg-surface",
+            "px-2 py-1.5 text-xs text-fg-primary placeholder:text-fg-muted",
+            "focus:border-accent-primary focus:outline-none",
+          )}
+        />
+        <div className="mt-2 flex justify-end gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="rounded-md px-2 py-1 text-fg-secondary hover:bg-bg-elevated hover:text-fg-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            className="rounded-md bg-accent-primary px-2 py-1 text-accent-primary-fg hover:brightness-110"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pin.note) {
+    return (
+      <div className="border-b border-border-subtle bg-bg-base px-4 py-2">
+        <button
+          type="button"
+          onClick={startEdit}
+          className="flex items-center gap-1.5 text-xs text-fg-muted hover:text-fg-primary"
+        >
+          <StickyNote size={12} strokeWidth={1.75} />
+          <span>Add note</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-b border-border-subtle bg-bg-base px-4 py-3">
+      <div
+        className={cn(
+          "rounded-md border border-border-subtle bg-bg-surface px-3 py-2",
+          "border-l-2 border-l-accent-primary",
+        )}
+      >
+        <div className="flex items-start gap-2">
+          <StickyNote
+            size={12}
+            strokeWidth={1.75}
+            className="mt-0.5 shrink-0 text-accent-primary"
+          />
+          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs text-fg-secondary">
+            {pin.note}
+          </p>
+          <button
+            type="button"
+            onClick={startEdit}
+            className="shrink-0 rounded-sm px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-bg-elevated hover:text-fg-primary"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

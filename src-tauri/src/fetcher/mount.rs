@@ -368,26 +368,51 @@ fn slot_for_patchline(patchline: Option<&str>) -> Slot {
 pub fn wire_legacy_slot(mounted: &MountedArtifact, indexes_root: &Path) -> Result<()> {
     let slot = slot_for_patchline(mounted.manifest.hytale_patchline.as_deref());
 
-    // Source: <indexes_root>/<build_id>/{tantivy,lance}/
+    // Source: <indexes_root>/<build_id>/{tantivy,lance,javadocs}/
     let src_tantivy = mounted.mounted_at.join("tantivy");
     let src_lance = mounted.mounted_at.join("lance");
+    let src_javadocs = mounted.mounted_at.join("javadocs");
 
-    // Destination: <indexes_root>/{tantivy,lance}/<slot>/
+    // Destination: <indexes_root>/{tantivy,lance,javadocs}/<slot>/
     let dst_tantivy = indexes_root.join("tantivy").join(slot.as_str());
     let dst_lance = indexes_root.join("lance").join(slot.as_str());
+    let dst_javadocs = indexes_root.join("javadocs").join(slot.as_str());
 
     move_dir_replacing(&src_tantivy, &dst_tantivy)
         .with_context(|| format!("wiring tantivy → {}", dst_tantivy.display()))?;
     move_dir_replacing(&src_lance, &dst_lance)
         .with_context(|| format!("wiring lance → {}", dst_lance.display()))?;
+    // Javadocs are optional - older artifacts (pre default-on Hypixel
+    // docs) won't have a `javadocs/` payload. Skip silently when absent
+    // so legacy artifacts still mount.
+    if src_javadocs.is_dir() {
+        move_dir_replacing(&src_javadocs, &dst_javadocs)
+            .with_context(|| format!("wiring javadocs → {}", dst_javadocs.display()))?;
+    }
 
     // Write atlas-meta.json so SearchCatalog::ensure_id and
     // indexer::summarize_slot both see the slot as ready.
+    //
+    // The indexer wrote a real atlas-meta.json into `tantivy/` at build
+    // time with the actual `docs` count, `indexed_at`, and
+    // `decompile_mtime`. Those moved into `dst_tantivy` along with the
+    // rest of the directory above, so prefer them over the manifest's
+    // build-time values - the manifest doesn't carry a doc count and
+    // hardcoding zero made the BranchCard show "0 files" forever.
+    //
+    // Manifest-sourced fields (signing fingerprint, schema_version,
+    // patchline, etc.) still win because they're the artifact's actual
+    // identity, not whatever the indexer's local snapshot recorded.
     let m = &mounted.manifest;
+    let existing = IndexMetadata::read(&dst_tantivy);
+    let (docs, indexed_at, decompile_mtime) = match &existing {
+        Some(prev) => (prev.docs, prev.indexed_at.clone(), prev.decompile_mtime.clone()),
+        None => (0, m.created_at.clone(), m.created_at.clone()),
+    };
     let meta = IndexMetadata {
-        indexed_at: m.created_at.clone(),
-        docs: 0, // unknown from the manifest; not load-bearing for search.
-        decompile_mtime: m.created_at.clone(),
+        indexed_at,
+        docs,
+        decompile_mtime,
         hytale_impl_version: m.hytale_impl_version.clone(),
         hytale_patchline: m.hytale_patchline.clone(),
         vineflower_version: m.vineflower_version.clone(),

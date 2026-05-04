@@ -35,6 +35,11 @@ pub enum SourceType {
     HmDoc,
     HypixelDoc,
     Asset,
+    /// User mod project source (`.java` files from a folder the user
+    /// pointed Atlas at via Settings → Projects). Distinguished from
+    /// `Source` so the UI can stripe-color these hits and the diff
+    /// tracker can scope its API-reference walks.
+    ProjectSource,
 }
 
 impl SourceType {
@@ -44,6 +49,7 @@ impl SourceType {
             SourceType::HmDoc => "hm_doc",
             SourceType::HypixelDoc => "hypixel_doc",
             SourceType::Asset => "asset",
+            SourceType::ProjectSource => "project_source",
         }
     }
 
@@ -56,6 +62,7 @@ impl SourceType {
             "hm_doc" => Some(SourceType::HmDoc),
             "hypixel_doc" => Some(SourceType::HypixelDoc),
             "asset" => Some(SourceType::Asset),
+            "project_source" => Some(SourceType::ProjectSource),
             _ => None,
         }
     }

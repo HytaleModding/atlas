@@ -290,6 +290,87 @@ impl SymbolsDb {
         Ok(rows.flatten().collect())
     }
 
+    /// Diff-tracker accessor: class modifiers list for the given FQN, or
+    /// `None` if the class isn't in this snapshot. Used to detect
+    /// `@Deprecated` annotations and other modifier-level changes.
+    pub fn class_modifiers(&self, class_fqn: &str) -> Result<Option<Vec<String>>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT modifiers FROM classes WHERE fqn = ?1 LIMIT 1")?;
+        let mut rows = stmt.query(params![class_fqn])?;
+        if let Some(row) = rows.next()? {
+            let json: String = row.get(0)?;
+            return Ok(Some(parse_json_array(&json)));
+        }
+        Ok(None)
+    }
+
+    /// Diff-tracker accessor: every method overload matching
+    /// `(class_fqn, name)`, with full modifiers / return / param info.
+    /// Empty Vec means "no method by this name on this class".
+    pub fn methods_by_name(&self, class_fqn: &str, name: &str) -> Result<Vec<DiffMethodRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT modifiers, return_type, param_types, is_constructor \
+             FROM methods WHERE class_fqn = ?1 AND name = ?2",
+        )?;
+        let rows = stmt.query_map(params![class_fqn, name], |r| {
+            Ok(DiffMethodRow {
+                modifiers: parse_json_array(&r.get::<_, String>(0)?),
+                return_type: r.get::<_, Option<String>>(1)?,
+                param_types: parse_json_array(&r.get::<_, String>(2)?),
+                is_constructor: r.get::<_, i64>(3)? != 0,
+            })
+        })?;
+        Ok(rows.flatten().collect())
+    }
+
+    /// Diff-tracker accessor: distinct method names declared on a class.
+    /// Powers the "renamed_likely" heuristic - we Levenshtein-distance
+    /// the user's referenced name against this list to suggest renames.
+    pub fn method_names_on_class(&self, class_fqn: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT name FROM methods WHERE class_fqn = ?1")?;
+        let rows = stmt.query_map(params![class_fqn], |r| r.get::<_, String>(0))?;
+        Ok(rows.flatten().collect())
+    }
+
+    /// Diff-tracker accessor: a field row by `(class_fqn, name)`, or
+    /// `None` if the field isn't declared on that class.
+    pub fn field_by_name(&self, class_fqn: &str, name: &str) -> Result<Option<DiffFieldRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT modifiers, type_text \
+             FROM fields WHERE class_fqn = ?1 AND name = ?2 LIMIT 1",
+        )?;
+        let mut rows = stmt.query(params![class_fqn, name])?;
+        if let Some(row) = rows.next()? {
+            return Ok(Some(DiffFieldRow {
+                modifiers: parse_json_array(&row.get::<_, String>(0)?),
+                type_text: row.get::<_, String>(1)?,
+            }));
+        }
+        Ok(None)
+    }
+
+    /// Diff-tracker accessor: distinct field names declared on a class.
+    pub fn field_names_on_class(&self, class_fqn: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT name FROM fields WHERE class_fqn = ?1")?;
+        let rows = stmt.query_map(params![class_fqn], |r| r.get::<_, String>(0))?;
+        Ok(rows.flatten().collect())
+    }
+
+    /// Cross-build compare accessor: every class FQN in this snapshot.
+    /// Used by `index_compare` to compute the symmetric difference between
+    /// two builds at the class level. Returned as a sorted list so the
+    /// frontend can render diffs deterministically.
+    pub fn all_class_fqns(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare("SELECT fqn FROM classes ORDER BY fqn")?;
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+        Ok(rows.flatten().collect())
+    }
+
     /// Number of rows across all three tables - useful for sanity checks
     /// and the manifest summary.
     pub fn row_counts(&self) -> Result<RowCounts> {
@@ -360,6 +441,24 @@ pub struct MethodRow {
     pub start_line: u32,
     pub end_line: u32,
     pub is_constructor: bool,
+}
+
+/// Output row for [`SymbolsDb::methods_by_name`]. Used by the diff
+/// tracker; carries full modifier / signature info so signature changes
+/// and `@Deprecated` additions can be detected.
+#[derive(Debug, Clone)]
+pub struct DiffMethodRow {
+    pub modifiers: Vec<String>,
+    pub return_type: Option<String>,
+    pub param_types: Vec<String>,
+    pub is_constructor: bool,
+}
+
+/// Output row for [`SymbolsDb::field_by_name`]. Diff-tracker only.
+#[derive(Debug, Clone)]
+pub struct DiffFieldRow {
+    pub modifiers: Vec<String>,
+    pub type_text: String,
 }
 
 /// Kind discriminator returned by [`SymbolsDb::find_by_fqn`] /

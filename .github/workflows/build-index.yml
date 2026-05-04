@@ -1,0 +1,179 @@
+name: build-index
+
+# Atlas central index pipeline. Triggers on:
+#   - Manual dispatch (the common case while bedding the workflow in).
+#   - Tag pushes matching `hytale-*` (post-bake, when an HM operator tags
+#     a release like `hytale-2026.04.22-release` to cut an artifact).
+#
+# Produces a signed `.tar.zst` artifact and uploads it as a GitHub
+# Release asset so the desktop client's `index_resolve_remote` flow
+# (Step 2 of the plan) can find and download it.
+#
+# Secrets required:
+#   - ATLAS_SIGNING_KEY: pkcs8 PEM private key, generated once via
+#     `atlas-build keygen`. Loaded into a temp file at the pack step
+#     and never echoed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      hytale_jar_url:
+        description: "Direct URL to HytaleServer.jar (or a redirector that resolves to one)."
+        required: true
+        type: string
+      patchline:
+        description: "Hytale patchline this artifact targets."
+        required: true
+        type: choice
+        options:
+          - release
+          - pre-release
+      release_tag:
+        description: "GitHub Release tag to attach the artifact to (created if missing)."
+        required: true
+        type: string
+  push:
+    tags:
+      - "hytale-*"
+
+permissions:
+  contents: write  # needed to create the Release + upload the asset
+
+concurrency:
+  # Don't let two builds for the same patchline race each other into the
+  # same Release tag. Tag-trigger pushes coalesce on tag name.
+  group: build-index-${{ github.event.inputs.patchline || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Atlas index
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      # `atlas-build pack --hytale-patchline` accepts release | pre-release.
+      ATLAS_PATCHLINE: ${{ github.event.inputs.patchline || 'release' }}
+      ATLAS_RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Java 21 (for Vineflower decompile)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build atlas-build
+        working-directory: src-tauri
+        run: cargo build --release --bin atlas-build
+
+      - name: Download Hytale server JAR
+        run: |
+          mkdir -p work
+          curl -fL --retry 3 --retry-delay 5 \
+            -o work/HytaleServer.jar \
+            "${{ github.event.inputs.hytale_jar_url }}"
+          ls -lh work/HytaleServer.jar
+
+      - name: Decompile JAR
+        working-directory: src-tauri
+        run: |
+          ./target/release/atlas-build decompile \
+            --jar ../work/HytaleServer.jar \
+            --out ../work/decompile
+
+      # Content-addressed embedding cache. Lives at `work/cache/embeddings/`
+      # and is restored across runs so the release-then-pre-release sequence
+      # (or a re-dispatch of the same patchline) skips BGE-small for chunks
+      # whose text is unchanged. Cache key includes Cargo.lock so a
+      # toolchain bump that changes embedder behaviour doesn't reuse stale
+      # vectors. The `restore-keys` fallback lets a pre-release run pick up
+      # a release run's cache from the same week even if Cargo.lock shifted.
+      - name: Restore embedding cache
+        uses: actions/cache@v4
+        with:
+          path: work/cache/embeddings
+          key: ${{ runner.os }}-atlas-embed-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-atlas-embed-
+
+      - name: Read decompile metadata
+        id: meta
+        run: |
+          META=work/decompile/atlas-decompile-meta.json
+          test -f "$META"
+          IMPL_VERSION=$(jq -r .hytale_impl_version "$META")
+          REVISION=$(jq -r .hytale_revision_id "$META")
+          # Build id: <patchline>-<short-revision>; falls back to git sha
+          # if the JAR didn't carry a revision id.
+          if [ "$REVISION" = "null" ] || [ -z "$REVISION" ]; then
+            SHORT=${GITHUB_SHA:0:9}
+          else
+            SHORT=${REVISION:0:9}
+          fi
+          BUILD_ID="${ATLAS_PATCHLINE}-${SHORT}"
+          echo "impl_version=$IMPL_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Resolved impl_version=$IMPL_VERSION build_id=$BUILD_ID"
+
+      - name: Index decompile tree
+        working-directory: src-tauri
+        run: |
+          ./target/release/atlas-build index \
+            --decompile ../work/decompile \
+            --staging ../work/staging \
+            --slot "$ATLAS_PATCHLINE" \
+            --hm-docs-fetch \
+            --cache-root ../work/cache \
+            --embedding-cache ../work/cache/embeddings
+
+      - name: Write signing key from secret
+        run: |
+          umask 077
+          mkdir -p work/keys
+          printf '%s' "${{ secrets.ATLAS_SIGNING_KEY }}" > work/keys/atlas-signing-key.pem
+          test -s work/keys/atlas-signing-key.pem
+
+      - name: Pack signed artifact
+        working-directory: src-tauri
+        run: |
+          ./target/release/atlas-build pack \
+            --staging ../work/staging \
+            --signing-key ../work/keys/atlas-signing-key.pem \
+            --hytale-impl-version "${{ steps.meta.outputs.impl_version }}" \
+            --hytale-patchline "$ATLAS_PATCHLINE" \
+            --build-id "${{ steps.meta.outputs.build_id }}" \
+            --out "../work/atlas-index-${{ steps.meta.outputs.build_id }}.tar.zst"
+
+      - name: Verify artifact
+        working-directory: src-tauri
+        run: |
+          ./target/release/atlas-build verify \
+            "../work/atlas-index-${{ steps.meta.outputs.build_id }}.tar.zst"
+
+      - name: Shred signing key
+        if: always()
+        run: |
+          if [ -f work/keys/atlas-signing-key.pem ]; then
+            shred -u work/keys/atlas-signing-key.pem || rm -f work/keys/atlas-signing-key.pem
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.ATLAS_RELEASE_TAG }}
+          name: ${{ env.ATLAS_RELEASE_TAG }}
+          generate_release_notes: false
+          files: |
+            work/atlas-index-${{ steps.meta.outputs.build_id }}.tar.zst

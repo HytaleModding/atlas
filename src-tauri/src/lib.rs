@@ -9,6 +9,7 @@ pub mod config;
 // Modules consumed by the `atlas-build` bin target are
 // `pub` so the CLI can orchestrate them through the library crate.
 // Everything else stays `mod` to keep the desktop-only surface private.
+pub mod diff;
 pub mod embedder;
 pub mod eval;
 pub mod fetcher;
@@ -18,7 +19,9 @@ pub mod indexer;
 pub mod lance;
 pub mod mcp;
 pub mod patcher;
+pub mod project;
 pub mod search;
+pub mod state;
 
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -80,6 +83,24 @@ pub fn run() {
         .map(|p| p.data_dir().to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
+    // Project mode registry. Loaded once at boot; mutations re-serialize
+    // `<data_dir>/projects.json` in place. We `expect` here on purpose:
+    // a parse failure means the user has a registry on disk we can't
+    // read, and silently starting empty would overwrite it on first
+    // mutation. Loud failure is the safer default - the user can
+    // inspect/repair the JSON and relaunch.
+    let project_registry = Arc::new(project::SharedProjectRegistry::new(
+        project::ProjectRegistry::load(&data_dir)
+            .expect("failed to load project registry"),
+    ));
+
+    // User-state persistence (pins, notes, recent files). Same loud-fail
+    // posture as the project registry: a corrupt state.sqlite is the
+    // user's data and silently replacing it would lose pins.
+    let state_db = Arc::new(
+        state::StateDb::open_or_create(&data_dir).expect("opening state.sqlite"),
+    );
+
     // Reap any half-extracted index dirs left behind by a prior crash
     // before SearchCatalog gets a chance to look at them. Cheap - only
     // directory scan + rm -rf of unmarked dirs.
@@ -132,6 +153,8 @@ pub fn run() {
         .manage(embedder)
         .manage(fetcher::status::SharedFetchStatus::new())
         .manage(guides_index)
+        .manage(project_registry)
+        .manage(state_db)
         .manage(RuntimeHandle(handle))
         .invoke_handler(tauri::generate_handler![
             commands::load_config,
@@ -155,6 +178,23 @@ pub fn run() {
             commands::index_mount_local,
             commands::index_fetch_status,
             commands::index_catalog,
+            commands::index_resolve_remote,
+            commands::index_remove,
+            commands::index_set_active,
+            commands::project_register,
+            commands::project_list,
+            commands::project_unregister,
+            commands::project_remove_index,
+            commands::project_index,
+            commands::diff_run,
+            commands::index_compare,
+            commands::state_pin_add,
+            commands::state_pin_remove,
+            commands::state_pin_list,
+            commands::state_note_set,
+            commands::state_note_get,
+            commands::state_recent_file_record,
+            commands::state_recent_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
