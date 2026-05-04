@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Search-result feedback
+    url: https://github.com/HytaleModding/atlas#run-it
+    about: Use the "Help us improve Atlas" button inside Atlas - it auto-attaches your search context.
+  - name: HytaleModding Discord
+    url: https://discord.gg/hytalemodding
+    about: General modding chat and questions.

@@ -1,0 +1,59 @@
+/* Atlas design tokens.
+ * Canonical values live here. Tailwind theme maps these for utility access.
+ * See docs/ui-spec.md § Visual Language.
+ *
+ * Dark mode is the default. Light mode overrides are added later
+ * under [data-theme='light'] once dark stabilizes.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* Surface */
+  --bg-base: #0f1419;
+  --bg-surface: #1a1f26;
+  --bg-elevated: #242a33;
+  --border-subtle: #2a3038;
+  --border-strong: #3a414b;
+
+  /* Foreground */
+  --fg-primary: #e8e6e3;
+  --fg-secondary: #b4b0a8;
+  --fg-muted: #9a978f;
+
+  /* Accent */
+  --accent-primary: #d4a048;
+  --accent-secondary: #4a9aa6;
+  --accent-primary-fg: #1a1510;
+
+  /* Semantic */
+  --destructive: #e06060;
+  --warning: #e0a040;
+  --success: #7aa967;
+
+  /* Section colors (search result badges) */
+  --section-source: #4a9aa6;
+  --section-guides: #d4a048;
+  --section-javadocs: #c97a5a;
+  --section-assets: #a87acb;
+  --section-mydocs: #7aa967;
+
+  /* Typography stacks */
+  --font-sans:
+    "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display:
+    "Cinzel", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: "JetBrains Mono", "Menlo", "Consolas", monospace;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Layout */
+  --nav-width: 220px;
+  --nav-width-collapsed: 56px;
+  --status-bar-height: 28px;
+  --right-panel-default-width: 50%;
+  --right-panel-min: 200px;
+  --right-panel-max: 1000px;
+}

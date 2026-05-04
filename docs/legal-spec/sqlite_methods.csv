@@ -1,0 +1,11 @@
+column_index,column_name,sql_type,nullable,example_value,description
+1,id,INTEGER,no (PRIMARY KEY AUTOINCREMENT),1,"row id, internal"
+2,class_fqn,TEXT,no,com.hytale.page.PageManager,"fully qualified name of the declaring class"
+3,name,TEXT,no,loadPage,"method name"
+4,is_constructor,INTEGER,no,0,"0 or 1 boolean flag"
+5,modifiers,TEXT,no,"[""public""]","JSON array of Java modifiers"
+6,return_type,TEXT,yes,com.hytale.page.Page,"fully qualified return type; null for constructors"
+7,param_types,TEXT,no,"[""java.lang.String"",""int""]","JSON array of fully qualified parameter types; empty array for zero-arg methods"
+8,thrown,TEXT,no,"[""java.io.IOException""]","JSON array of declared thrown exceptions; empty array if none"
+9,start_line,INTEGER,no,142,"1-based inclusive start line of the method declaration"
+10,end_line,INTEGER,no,178,"1-based inclusive end line of the method declaration"

@@ -1,0 +1,143 @@
+[package]
+name = "atlas"
+version = "0.1.0"
+description = "Atlas - mod author dashboard for Hytale"
+authors = ["Atlas contributors"]
+edition = "2021"
+# Two bin targets live in this crate: `atlas` (the Tauri desktop app)
+# and `atlas-build` (the central-builder CLI). `cargo run` without
+# `--bin` defaults to the desktop app - that's what `npm run tauri dev`
+# invokes under the hood.
+default-run = "atlas"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "atlas_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# `atlas-build`: headless CLI used by the central builder (and local
+# repro) to pack, sign, and verify index artifacts. Shares every module
+# with the desktop app; only the orchestration differs.
+[[bin]]
+name = "atlas-build"
+path = "src/bin/atlas_build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "5"
+
+# Axum backend - hosts /healthz and the MCP HTTP surface alongside the
+# Tauri command IPC.
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "io-util", "process"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Patcher - downloads Vineflower, extracts the server JAR, decompiles to source.
+zip = "2"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+futures-util = "0.3"
+anyhow = "1"
+
+# Indexer - keyword search over decompiled sources.
+tantivy = "0.22"
+walkdir = "2"
+
+# Chunker - parses Java source into per-type + per-method chunks. One
+# chunk = one Tantivy document and one embedding row.
+tree-sitter = "0.22"
+tree-sitter-java = "0.21"
+
+# Embedder - BGE-small-en-v1.5 via fastembed-rs for semantic retrieval.
+# Model weights are downloaded on first use and cached under
+# <atlas-data>/models/. The Embedder trait in src/embedder/mod.rs keeps
+# this dep swappable (ort / candle / python sidecar are documented
+# fallbacks).
+fastembed = "4"
+
+# Vector store - LanceDB holds one row per chunk with the 384-dim BGE
+# embedding + metadata mirroring the Tantivy schema. arrow is pinned to
+# the major version lancedb 0.27 expects (^57.2) so RecordBatch
+# construction stays ABI-compatible.
+lancedb = "0.27"
+arrow = "57.2"
+async-trait = "0.1"
+
+# Symbol sidecar - SQLite database alongside Tantivy + Lance, keyed by
+# class FQN + method signature. Feeds the upcoming diff tracker (resolve
+# mod's API refs against release index) and the `find_symbol` MCP tool.
+# bundled-feature means we don't depend on a system SQLite; `fts5`
+# powers fuzzy signature lookups without extra indexing work on our side.
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Artifact packaging. `tar` builds the .tar layout; `zstd`
+# compresses/decompresses the outer `.tar.zst`. `hex` renders SHA256
+# digests (sha2 is already pulled in by the Vineflower verifier).
+tar = "0.4"
+zstd = "0.13"
+hex = "0.4"
+
+# Ed25519 signing. `atlas-build` signs `manifest.json` with the HM
+# signing keypair; the desktop client verifies with the embedded pubkey
+# in `src-tauri/signing/atlas-pubkey.hex`. `rand` + `pkcs8` keep key
+# generation + loading off the hot path for the binary.
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
+rand = "0.8"
+
+# CLI parsing for the `atlas-build` bin target. Derive feature keeps
+# the subcommand structs declarative; no runtime magic.
+clap = { version = "4", features = ["derive"] }
+
+# `.env` loader for local dev runs of `atlas-build`. The summarizer pass
+# needs ANTHROPIC_API_KEY; in CI it comes from a repo secret, locally
+# from `.env` (gitignored). dotenvy is the maintained fork of dotenv.
+dotenvy = "0.15"
+
+# Hypixel Javadoc HTML parsing. `scraper` wraps html5ever with
+# CSS-selector queries, which keeps the Javadoc walker small and
+# tolerant of minor template drift across Java versions. Used only by
+# `indexer::hypixel_docs`; not on the search hot path.
+scraper = "0.20"
+
+# MCP surface - streamable HTTP server mounted alongside /healthz.
+# The `schemars` feature auto-derives tool input schemas from structs
+# so the contract in docs/mcp-contract.md and the runtime surface stay
+# in sync. `tower` feature lets us plug the MCP service into the
+# existing Axum router without a second listener.
+rmcp = { version = "1.5", features = [
+    "server",
+    "macros",
+    "schemars",
+    "transport-streamable-http-server",
+    "tower",
+] }
+schemars = "1"
+
+[dev-dependencies]
+# Temp dirs for module-level integration tests (symbols sidecar, fetcher,
+# manifest verify). Matches existing usage patterns elsewhere in the repo.
+tempfile = "3"
+
+# Dev-profile dep optimization. Our crate stays at debug (opt-level = 0)
+# for fast incremental rebuilds, but every third-party dep - fastembed,
+# ort, tokenizers, lance, arrow, datafusion, tantivy - builds at -O3.
+# These deps dominate indexer + search runtime, and unoptimized builds
+# were ~50-100× slower (~12s/file indexing in debug vs sub-second with
+# this setting). First rebuild after a clean is slow (one-time dep
+# recompile); subsequent dev-loop rebuilds are unaffected because only
+# our code changes.
+[profile.dev.package."*"]
+opt-level = 3

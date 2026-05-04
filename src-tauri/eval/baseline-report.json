@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "ran_at": "2026-04-30T08:40:56.957Z",
+  "staging": "eval-staging",
+  "queries_path": "src-tauri/eval/queries.json",
+  "config": {
+    "top_k": 10,
+    "negative_max_hits": 3
+  },
+  "summary": {
+    "n_queries": 5,
+    "n_positive": 4,
+    "n_negative": 1,
+    "top1_hit_rate": 0.25,
+    "top3_hit_rate": 0.75,
+    "mrr": 0.45833334,
+    "negative_pass_rate": 0.0,
+    "mean_elapsed_ms": 92.6
+  },
+  "per_query": [
+    {
+      "query": "access player inventory",
+      "expected_top_paths": [
+        "command/commands/player/inventory/InventorySeeCommand.java",
+        "command/commands/player/inventory/InventoryCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/command/commands/player/inventory/InventoryClearCommand.java",
+        "hytale/server/core/command/commands/player/inventory/InventorySeeCommand.java",
+        "hytale/server/core/command/commands/player/inventory/InventoryItemCommand.java",
+        "hytale/server/core/command/commands/player/inventory/InventoryCommand.java",
+        "hytale/server/core/command/commands/player/inventory/InventoryBackpackCommand.java",
+        "hytale/protocol/packets/inventory/UpdatePlayerInventory.java",
+        "hytale/server/core/inventory/Inventory.java",
+        "hytale/server/core/event/events/ecs/DropItemEvent.java",
+        "hytale/protocol/packets/serveraccess/Access.java",
+        "hytale/server/core/modules/entity/player/PlayerSendInventorySystem.java"
+      ],
+      "best_expected_rank": 2,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.5,
+      "negative_pass": null,
+      "elapsed_ms": 107
+    },
+    {
+      "query": "PageManager",
+      "expected_top_paths": [
+        "entity/entities/player/pages/PageManager.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/entity/entities/player/pages/PageManager.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/server/core/plugin/pages/PluginListPage.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/OpenCustomUIInteraction.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/server/core/modules/entity/damage/DeathSystems.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/OpenItemStackContainerInteraction.java",
+        "hytale/server/core/entity/entities/player/pages/itemrepair/RepairItemInteraction.java",
+        "hytale/server/core/plugin/PluginListPageManager.java",
+        "hytale/builtin/beds/interactions/BedInteraction.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 81
+    },
+    {
+      "query": "teleport player to coordinates",
+      "expected_top_paths": [
+        "builtin/teleport/commands/teleport/TeleportCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportPlayerToCoordinatesCommand.java",
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportToCoordinatesCommand.java",
+        "hytale/server/core/modules/entity/teleport/TeleportSystems.java",
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportToPlayerCommand.java",
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportOtherToPlayerCommand.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/server/core/modules/entity/teleport/Teleport.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportHomeCommand.java",
+        "hytale/protocol/packets/worldmap/TeleportToWorldMapPosition.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportTopCommand.java"
+      ],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": null,
+      "elapsed_ms": 106
+    },
+    {
+      "query": "check player permissions",
+      "expected_top_paths": [
+        "server/core/permissions/HytalePermissions.java",
+        "server/core/permissions/PermissionHolder.java",
+        "server/core/permissions/PermissionsModule.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/event/events/permissions/PlayerPermissionChangeEvent.java",
+        "hytale/server/core/modules/entity/condition/CheckPlayerGameModeCondition.java",
+        "hytale/server/core/permissions/HytalePermissions.java",
+        "hytale/builtin/buildertools/BuilderToolsPacketHandler.java",
+        "hytale/server/core/permissions/PermissionsModule.java",
+        "hytale/builtin/asseteditor/AssetEditorGamePacketHandler.java",
+        "hytale/server/core/util/concurrent/ThreadUtil.java",
+        "hytale/server/core/modules/camera/FlyCameraModule.java",
+        "hytale/server/core/permissions/provider/HytalePermissionsProvider.java",
+        "hytale/server/core/entity/entities/Player.java"
+      ],
+      "best_expected_rank": 3,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.33333334,
+      "negative_pass": null,
+      "elapsed_ms": 88
+    },
+    {
+      "query": "blarg",
+      "expected_top_paths": [],
+      "actual_top_paths": [
+        "hytale/server/core/asset/type/buildertool/config/args/BoolArg.java",
+        "hytale/server/worldgen/cave/shape/distorted/DistortedShape.java",
+        "hytale/server/worldgen/loader/biome/BiomePatternGeneratorJsonLoader.java",
+        "hytale/math/shape/Shape.java",
+        "hytale/server/core/universe/world/storage/component/ChunkSavingSystems.java",
+        "hytale/server/npc/corecomponents/timer/builders/BuilderSensorAlarm.java",
+        "hytale/server/spawning/util/FloodFillPositionSelector.java",
+        "hytale/server/worldgen/cave/shape/distorted/DistortedCylinderShape.java",
+        "hytale/builtin/hytalegenerator/noise/FastNoiseLite.java",
+        "hytale/protocol/packets/buildertools/BuilderToolBoolArg.java"
+      ],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": false,
+      "elapsed_ms": 81
+    }
+  ]
+}

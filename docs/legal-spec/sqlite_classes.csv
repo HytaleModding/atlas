@@ -1,0 +1,10 @@
+column_index,column_name,sql_type,nullable,example_value,description
+1,fqn,TEXT,no (PRIMARY KEY),com.hytale.page.PageManager,"fully qualified class name"
+2,simple_name,TEXT,no,PageManager,"unqualified class name"
+3,kind,TEXT,no,class,"one of: class | interface | enum | record"
+4,modifiers,TEXT,no,"[""public"",""final""]","JSON array of Java modifiers"
+5,superclass,TEXT,yes,com.hytale.page.AbstractManager,"fully qualified superclass name; null for classes that extend nothing or for interfaces"
+6,interfaces,TEXT,no,"[""java.io.Serializable""]","JSON array of fully qualified interface names; empty array if none"
+7,rel_path,TEXT,no,com/hytale/page/PageManager.java,"relative file path"
+8,start_line,INTEGER,no,1,"1-based inclusive start line of the type declaration"
+9,end_line,INTEGER,no,412,"1-based inclusive end line of the type declaration"

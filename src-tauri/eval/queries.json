@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "description": "Golden query set for Atlas search-quality evaluation. Each entry pairs a realistic user query with one or more expected hit paths. A query 'hits' if any expected_top_paths value is a suffix of an actual result path. Top-1 / Top-3 / MRR are computed against this set. Grow this file as new query patterns are discovered - the eval runner is forward-compatible with arbitrary entries.",
+  "categories": {
+    "symbol": "Exact class name lookups. The canonical declaration should be #1.",
+    "method": "Method-shaped NL queries. Expected file is the one that DEFINES the action, not files that consume it.",
+    "topical": "Broader NL queries about a feature area. Multiple files acceptable; the package as a whole is the right answer.",
+    "concept": "How-do-I queries phrased as a developer would. Tests whether semantic matching connects intent to implementation.",
+    "negative": "Gibberish queries that should return zero (or near-zero) hits. Validates the kNN distance threshold and BM25 floor."
+  },
+  "queries": [
+    {
+      "category": "symbol",
+      "query": "PageManager",
+      "expected_top_paths": ["entity/entities/player/pages/PageManager.java"],
+      "notes": "Canonical class definition should be #1."
+    },
+    {
+      "category": "symbol",
+      "query": "PlayerRef",
+      "expected_top_paths": ["server/core/universe/PlayerRef.java"],
+      "notes": "Core player reference type."
+    },
+    {
+      "category": "symbol",
+      "query": "HytaleServer",
+      "expected_top_paths": ["server/core/HytaleServer.java"],
+      "notes": "Top-level server class. HytaleServerConfig is acceptable but not preferred."
+    },
+    {
+      "category": "symbol",
+      "query": "PermissionHolder",
+      "expected_top_paths": ["server/core/permissions/PermissionHolder.java"],
+      "notes": "Permission interface."
+    },
+    {
+      "category": "symbol",
+      "query": "DamageModule",
+      "expected_top_paths": ["server/core/modules/entity/damage/DamageModule.java"],
+      "notes": "Damage subsystem entry point."
+    },
+    {
+      "category": "symbol",
+      "query": "WorldChunk",
+      "expected_top_paths": ["server/core/universe/world/chunk/WorldChunk.java"],
+      "notes": "Chunk data structure."
+    },
+    {
+      "category": "symbol",
+      "query": "SpawnBeacon",
+      "expected_top_paths": ["server/spawning/beacons/SpawnBeacon.java"],
+      "notes": "Spawn beacon entity."
+    },
+    {
+      "category": "symbol",
+      "query": "InventoryComponent",
+      "expected_top_paths": ["server/core/inventory/InventoryComponent.java"],
+      "notes": "ECS component holding inventory state."
+    },
+    {
+      "category": "method",
+      "query": "teleport player to coordinates",
+      "expected_top_paths": [
+        "builtin/teleport/commands/teleport/variant/TeleportPlayerToCoordinatesCommand.java",
+        "builtin/teleport/commands/teleport/variant/TeleportToCoordinatesCommand.java"
+      ],
+      "notes": "Command that takes a player + xyz."
+    },
+    {
+      "category": "method",
+      "query": "clear a player's inventory",
+      "expected_top_paths": [
+        "command/commands/player/inventory/InventoryClearCommand.java"
+      ],
+      "notes": "Wipes inventory contents."
+    },
+    {
+      "category": "method",
+      "query": "open a target player's inventory",
+      "expected_top_paths": [
+        "command/commands/player/inventory/InventorySeeCommand.java"
+      ],
+      "notes": "/inv see <player> - admin-shaped command."
+    },
+    {
+      "category": "method",
+      "query": "give item to player",
+      "expected_top_paths": [
+        "command/commands/player/inventory/GiveCommand.java"
+      ],
+      "notes": "The canonical /give command. Audited 2026-04-30: the prior expected paths (InventoryItemCommand opens a backpack UI; SpawnItemCommand drops items into the world) were both wrong."
+    },
+    {
+      "category": "method",
+      "query": "spawn an NPC",
+      "expected_top_paths": [
+        "server/npc/commands/NPCSpawnCommand.java",
+        "server/npc/interactions/SpawnNPCInteraction.java"
+      ],
+      "notes": "NPC instantiation entry points."
+    },
+    {
+      "category": "method",
+      "query": "damage an entity",
+      "expected_top_paths": [
+        "modules/interaction/interaction/config/server/DamageEntityInteraction.java",
+        "core/modules/entity/damage/Damage.java"
+      ],
+      "notes": "Apply damage to a target entity."
+    },
+    {
+      "category": "method",
+      "query": "send a chat message",
+      "expected_top_paths": [
+        "protocol/packets/interface_/ChatMessage.java",
+        "core/event/events/player/PlayerChatEvent.java"
+      ],
+      "notes": "Either the wire packet or the chat event is acceptable."
+    },
+    {
+      "category": "method",
+      "query": "open chat with prefilled command",
+      "expected_top_paths": [
+        "protocol/packets/interface_/OpenChatWithCommand.java"
+      ],
+      "notes": "Server prompts client to open chat with text inserted."
+    },
+    {
+      "category": "method",
+      "query": "set the world spawn point",
+      "expected_top_paths": [
+        "universe/world/commands/worldconfig/WorldConfigSetSpawnCommand.java",
+        "core/asset/type/gameplay/respawn/WorldSpawnPoint.java"
+      ],
+      "notes": "Either the command or the asset type."
+    },
+    {
+      "category": "topical",
+      "query": "check player permissions",
+      "expected_top_paths": [
+        "server/core/permissions/PermissionHolder.java",
+        "server/core/permissions/PermissionsModule.java",
+        "server/core/permissions/provider/PermissionProvider.java",
+        "server/core/permissions/HytalePermissions.java",
+        "server/core/permissions/commands/PermTestCommand.java"
+      ],
+      "notes": "Permissions package as a whole. Audited 2026-04-30: broadened to include HytalePermissions (central definition) and PermTestCommand (the /perm test command, literal match for 'check'). Cross-encoder previously favored consumers over definitions."
+    },
+    {
+      "category": "topical",
+      "query": "teleport command",
+      "expected_top_paths": [
+        "builtin/teleport/commands/teleport/TeleportCommand.java",
+        "builtin/teleport/TeleportPlugin.java"
+      ],
+      "notes": "Top-level teleport plugin or command."
+    },
+    {
+      "category": "topical",
+      "query": "block physics",
+      "expected_top_paths": [
+        "builtin/blockphysics/BlockPhysicsPlugin.java",
+        "builtin/blockphysics/BlockPhysicsSystems.java"
+      ],
+      "notes": "Block physics plugin entry."
+    },
+    {
+      "category": "topical",
+      "query": "world generation",
+      "expected_top_paths": [
+        "server/worldgen/HytaleWorldGenProvider.java",
+        "server/core/universe/world/worldgen/IWorldGen.java",
+        "builtin/worldgen/WorldGenPlugin.java",
+        "command/commands/world/worldgen/WorldGenCommand.java"
+      ],
+      "notes": "Audited 2026-04-30: the actual generator implementation lives in hytale/server/worldgen/ (HytaleWorldGenProvider, IWorldGen). The original golden only listed the content-modifier plugin and admin CLI command, which are reasonable but not the most central matches."
+    },
+    {
+      "category": "topical",
+      "query": "spawn beacon system",
+      "expected_top_paths": [
+        "server/spawning/beacons/SpawnBeacon.java",
+        "server/spawning/beacons/SpawnBeaconSystems.java"
+      ],
+      "notes": "Beacons that spawn entities."
+    },
+    {
+      "category": "topical",
+      "query": "damage calculation",
+      "expected_top_paths": [
+        "interaction/config/server/combat/DamageCalculator.java",
+        "core/modules/entity/damage/DamageCalculatorSystems.java"
+      ],
+      "notes": "Damage math module."
+    },
+    {
+      "category": "concept",
+      "query": "how do I listen for player chat",
+      "expected_top_paths": [
+        "server/core/event/events/player/PlayerChatEvent.java"
+      ],
+      "notes": "Event hook for incoming chat."
+    },
+    {
+      "category": "concept",
+      "query": "what runs when a player joins a world",
+      "expected_top_paths": [
+        "server/core/event/events/player/AddPlayerToWorldEvent.java",
+        "protocol/packets/player/JoinWorld.java"
+      ],
+      "notes": "World-join lifecycle event or its wire packet."
+    },
+    {
+      "category": "concept",
+      "query": "where is the inventory packet handled",
+      "expected_top_paths": [
+        "core/io/handlers/game/InventoryPacketHandler.java"
+      ],
+      "notes": "Server-side packet handler for inventory ops."
+    },
+    {
+      "category": "concept",
+      "query": "send updated inventory to client",
+      "expected_top_paths": [
+        "protocol/packets/inventory/UpdatePlayerInventory.java",
+        "core/modules/entity/player/PlayerSendInventorySystem.java"
+      ],
+      "notes": "Either the wire packet or the system that sends it."
+    },
+    {
+      "category": "negative",
+      "query": "blarg",
+      "expected_top_paths": [],
+      "notes": "Gibberish query. Expected: zero hits or near-zero. The kNN distance threshold (lance/mod.rs MAX_KNN_DISTANCE = 0.85) drops vector slop. BM25 has no equivalent floor today, so a tiny number of weak text matches is acceptable; >5 hits means the threshold is too loose or BM25 needs a floor."
+    },
+    {
+      "category": "negative",
+      "query": "xyzqwerty",
+      "expected_top_paths": [],
+      "notes": "Second gibberish probe. Same expectation as 'blarg'."
+    }
+  ]
+}

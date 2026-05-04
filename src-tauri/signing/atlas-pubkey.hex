@@ -1,0 +1,20 @@
+# Atlas artifact signing pubkey - Ed25519 (32 bytes, 64 hex chars).
+#
+# PLACEHOLDER - DO NOT SHIP.
+#
+# This file gets compiled into the desktop client at build time via
+# `include_str!` in src-tauri/src/fetcher/signing.rs. Whatever value is
+# here is what clients trust for `manifest.json.sig` verification.
+#
+# To rotate for production:
+#   1. On an air-gapped machine (or in CI secrets), run
+#      `cargo run --bin atlas-build -- keygen` to emit a pkcs8 private
+#      key + the matching hex pubkey.
+#   2. Store the private key only in HM's CI secret store.
+#   3. Replace the hex below with the pubkey.
+#   4. Ship a new Atlas client - old clients can't mount artifacts
+#      signed by the rotated key (which is the intended behavior).
+#
+# DEV KEY - paired with D:/CodeProjects/Atlas-loop-test/test-key.pem.
+# Replace with the real HM pubkey before shipping.
+4300ed47961370c9fd204f332cf967c3a00042443e60112aedcab64e8feae49a

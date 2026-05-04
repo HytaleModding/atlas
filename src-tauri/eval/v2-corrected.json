@@ -1,0 +1,708 @@
+{
+  "schema_version": 1,
+  "ran_at": "2026-04-30T22:23:07.785Z",
+  "staging": "eval-staging-v2",
+  "queries_path": "eval/queries.json",
+  "config": {
+    "top_k": 10,
+    "negative_max_hits": 3
+  },
+  "summary": {
+    "n_queries": 29,
+    "n_positive": 27,
+    "n_negative": 2,
+    "top1_hit_rate": 0.6296296,
+    "top3_hit_rate": 0.8148148,
+    "mrr": 0.72376543,
+    "negative_pass_rate": 1.0,
+    "mean_elapsed_ms": 1828.3103
+  },
+  "per_query": [
+    {
+      "query": "PageManager",
+      "expected_top_paths": [
+        "entity/entities/player/pages/PageManager.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/entity/entities/player/pages/PageManager.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/OpenCustomUIInteraction.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/OpenItemStackContainerInteraction.java",
+        "hytale/server/core/modules/entity/damage/DeathSystems.java",
+        "hytale/server/core/entity/entities/player/pages/itemrepair/RepairItemInteraction.java",
+        "hytale/server/core/plugin/PluginListPageManager.java",
+        "hytale/server/core/plugin/pages/PluginListPage.java",
+        "hytale/builtin/beds/interactions/BedInteraction.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 39
+    },
+    {
+      "query": "PlayerRef",
+      "expected_top_paths": [
+        "server/core/universe/PlayerRef.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/universe/PlayerRef.java",
+        "hytale/server/core/event/events/player/PlayerRefEvent.java",
+        "hytale/builtin/asseteditor/EditorClient.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/server/core/universe/system/PlayerRefAddedSystem.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/builtin/asseteditor/AssetSpecificFunctionality.java",
+        "hytale/server/core/command/commands/player/PlayerResetCommand.java",
+        "hytale/builtin/buildertools/BuilderToolsPacketHandler.java",
+        "hytale/server/core/event/events/player/PlayerEvent.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 37
+    },
+    {
+      "query": "HytaleServer",
+      "expected_top_paths": [
+        "server/core/HytaleServer.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/HytaleServer.java",
+        "hytale/server/core/command/system/CommandManager.java",
+        "hytale/LateMain.java",
+        "hytale/storage/package-info.java",
+        "hytale/function/package-info.java",
+        "hytale/server/core/HytaleServerConfig.java",
+        "hytale/component/package-info.java",
+        "hytale/server/core/command/commands/server/StopCommand.java",
+        "hytale/server/core/update/command/UpdateApplyCommand.java",
+        "hytale/server/core/io/handlers/SetupPacketHandler.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 36
+    },
+    {
+      "query": "PermissionHolder",
+      "expected_top_paths": [
+        "server/core/permissions/PermissionHolder.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/permissions/PermissionHolder.java",
+        "hytale/server/core/command/system/CommandUtil.java",
+        "hytale/server/core/command/system/CommandSender.java",
+        "hytale/builtin/asseteditor/EditorClient.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/server/core/permissions/provider/PermissionProvider.java",
+        "hytale/server/core/permissions/PermissionsModule.java",
+        "hytale/server/core/permissions/commands/PermUserCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 37
+    },
+    {
+      "query": "DamageModule",
+      "expected_top_paths": [
+        "server/core/modules/entity/damage/DamageModule.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/modules/entity/damage/DamageModule.java",
+        "hytale/builtin/adventure/camera/system/CameraEffectSystem.java",
+        "hytale/server/core/modules/entity/damage/DamageSystems.java",
+        "hytale/server/core/entity/knockback/KnockbackSystems.java",
+        "hytale/server/core/modules/entity/livingentity/LivingEntityEffectSystem.java",
+        "hytale/server/npc/systems/NPCDamageSystems.java",
+        "hytale/server/core/modules/entity/damage/DamageCalculatorSystems.java",
+        "hytale/builtin/npccombatactionevaluator/memory/DamageMemorySystems.java",
+        "hytale/protocol/packets/player/DamageInfo.java",
+        "hytale/server/core/modules/entity/damage/DeathComponent.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 40
+    },
+    {
+      "query": "WorldChunk",
+      "expected_top_paths": [
+        "server/core/universe/world/chunk/WorldChunk.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/universe/world/chunk/WorldChunk.java",
+        "hytale/server/core/modules/entity/component/TransformComponent.java",
+        "hytale/server/core/universe/world/IWorldChunks.java",
+        "hytale/server/core/universe/world/events/ecs/ChunkSaveEvent.java",
+        "hytale/protocol/packets/worldmap/MapChunk.java",
+        "hytale/protocol/packets/world/SetChunk.java",
+        "hytale/server/core/universe/world/chunk/BlockChunk.java",
+        "hytale/server/core/universe/world/events/ChunkEvent.java",
+        "hytale/server/core/universe/world/events/ecs/ChunkUnloadEvent.java",
+        "hytale/server/core/universe/world/worldmap/provider/chunk/ChunkWorldMap.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 36
+    },
+    {
+      "query": "SpawnBeacon",
+      "expected_top_paths": [
+        "server/spawning/beacons/SpawnBeacon.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/spawning/beacons/SpawnBeacon.java",
+        "hytale/server/spawning/commands/SpawnBeaconsCommand.java",
+        "hytale/server/spawning/beacons/SpawnBeaconSystems.java",
+        "hytale/server/spawning/SpawningPlugin.java",
+        "hytale/server/spawning/beacons/LegacySpawnBeaconEntity.java",
+        "hytale/server/spawning/managers/SpawnManager.java",
+        "hytale/server/spawning/corecomponents/ActionTriggerSpawnBeacon.java",
+        "hytale/builtin/portals/systems/voidevent/VoidSpawnerSystems.java",
+        "hytale/server/spawning/systems/BeaconSpatialSystem.java",
+        "hytale/server/spawning/spawnmarkers/SpawnMarkerEntity.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 31
+    },
+    {
+      "query": "InventoryComponent",
+      "expected_top_paths": [
+        "server/core/inventory/InventoryComponent.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/inventory/InventoryComponent.java",
+        "hytale/server/core/inventory/InventorySystems.java",
+        "hytale/server/core/inventory/Inventory.java",
+        "hytale/server/core/modules/entity/item/ItemSystems.java",
+        "hytale/server/core/inventory/InventoryChangeEvent.java",
+        "hytale/server/npc/role/Role.java",
+        "hytale/server/npc/util/InventoryHelper.java",
+        "hytale/server/core/modules/entity/EntityModule.java",
+        "hytale/protocol/InventorySection.java",
+        "hytale/protocol/packets/inventory/InventoryAction.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 33
+    },
+    {
+      "query": "teleport player to coordinates",
+      "expected_top_paths": [
+        "builtin/teleport/commands/teleport/variant/TeleportPlayerToCoordinatesCommand.java",
+        "builtin/teleport/commands/teleport/variant/TeleportToCoordinatesCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportPlayerToCoordinatesCommand.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportTopCommand.java",
+        "hytale/server/core/modules/entity/teleport/TeleportSystems.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportHomeCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportWorldCommand.java",
+        "hytale/builtin/teleport/commands/teleport/SpawnCommand.java",
+        "hytale/server/core/asset/type/gameplay/respawn/HomeOrSpawnPoint.java",
+        "hytale/builtin/teleport/components/TeleportHistory.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 5079
+    },
+    {
+      "query": "clear a player's inventory",
+      "expected_top_paths": [
+        "command/commands/player/inventory/InventoryClearCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/command/commands/player/inventory/InventoryClearCommand.java",
+        "hytale/server/core/io/handlers/game/InventoryPacketHandler.java",
+        "hytale/server/core/inventory/Inventory.java",
+        "hytale/builtin/adventure/objectives/systems/ObjectiveInventoryChangeSystem.java",
+        "hytale/builtin/crafting/window/StructuralCraftingWindow.java",
+        "hytale/server/npc/util/InventoryHelper.java",
+        "hytale/builtin/portals/commands/player/LeaveCommand.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/ModifyInventoryInteraction.java",
+        "hytale/builtin/portals/systems/curse/DeleteCursedItemsOnSpawnSystem.java",
+        "hytale/builtin/adventure/objectives/completion/ClearObjectiveItemsCompletion.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 5259
+    },
+    {
+      "query": "open a target player's inventory",
+      "expected_top_paths": [
+        "command/commands/player/inventory/InventorySeeCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/command/commands/player/inventory/InventorySeeCommand.java",
+        "hytale/builtin/crafting/window/StructuralCraftingWindow.java",
+        "hytale/server/core/io/handlers/game/InventoryPacketHandler.java",
+        "hytale/builtin/adventure/shop/barter/BarterPage.java",
+        "hytale/builtin/buildertools/BuilderToolsSystems.java",
+        "hytale/server/core/command/commands/player/inventory/InventoryItemCommand.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/OpenItemStackContainerInteraction.java",
+        "hytale/builtin/adventure/objectives/systems/ObjectiveInventoryChangeSystem.java",
+        "hytale/builtin/adventure/objectives/completion/GiveItemsCompletion.java",
+        "hytale/server/core/command/commands/player/inventory/GiveCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 4609
+    },
+    {
+      "query": "give item to player",
+      "expected_top_paths": [
+        "command/commands/player/inventory/GiveCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/adventure/shop/GiveItemInteraction.java",
+        "hytale/server/core/command/commands/player/inventory/GiveCommand.java",
+        "hytale/server/core/entity/ItemUtils.java",
+        "hytale/server/core/io/handlers/game/InventoryPacketHandler.java",
+        "hytale/builtin/crafting/CraftingPlugin.java",
+        "hytale/builtin/buildertools/interactions/PickupItemInteraction.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/protocol/ItemPlayerAnimations.java",
+        "hytale/builtin/adventure/objectives/completion/GiveItemsCompletion.java",
+        "hytale/builtin/portals/commands/utils/CursedHeldItemCommand.java"
+      ],
+      "best_expected_rank": 2,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.5,
+      "negative_pass": null,
+      "elapsed_ms": 3044
+    },
+    {
+      "query": "spawn an NPC",
+      "expected_top_paths": [
+        "server/npc/commands/NPCSpawnCommand.java",
+        "server/npc/interactions/SpawnNPCInteraction.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/npc/interactions/SpawnNPCInteraction.java",
+        "hytale/server/npc/commands/NPCSpawnCommand.java",
+        "hytale/server/spawning/assets/spawns/config/NPCSpawn.java",
+        "hytale/server/spawning/assets/spawns/config/BeaconNPCSpawn.java",
+        "hytale/server/npc/pages/EntitySpawnPage.java",
+        "hytale/server/spawning/jobs/NPCBeaconSpawnJob.java",
+        "hytale/server/spawning/assets/spawns/config/WorldNPCSpawn.java",
+        "hytale/server/spawning/spawnmarkers/SpawnMarkerEntity.java",
+        "hytale/server/spawning/world/WorldNPCSpawnStat.java",
+        "hytale/server/npc/commands/NPCRunTestsCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 56
+    },
+    {
+      "query": "damage an entity",
+      "expected_top_paths": [
+        "modules/interaction/interaction/config/server/DamageEntityInteraction.java",
+        "core/modules/entity/damage/Damage.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/deployables/config/DeployableAoeConfig.java",
+        "hytale/server/npc/util/DamageData.java",
+        "hytale/server/core/modules/entity/damage/Damage.java",
+        "hytale/server/core/command/commands/player/DamageCommand.java",
+        "hytale/server/core/modules/entity/damage/DamageCalculatorSystems.java",
+        "hytale/builtin/adventure/camera/command/CameraEffectCommand.java",
+        "hytale/server/npc/systems/NPCDamageSystems.java",
+        "hytale/server/core/entity/damage/DamageDataComponent.java",
+        "hytale/server/core/entity/effect/ActiveEntityEffect.java",
+        "hytale/protocol/DamageEntityInteraction.java"
+      ],
+      "best_expected_rank": 3,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.33333334,
+      "negative_pass": null,
+      "elapsed_ms": 3476
+    },
+    {
+      "query": "send a chat message",
+      "expected_top_paths": [
+        "protocol/packets/interface_/ChatMessage.java",
+        "core/event/events/player/PlayerChatEvent.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/server/core/universe/PlayerRef.java",
+        "hytale/server/core/console/command/SayCommand.java",
+        "hytale/protocol/packets/interface_/ChatMessage.java",
+        "hytale/server/core/receiver/IMessageReceiver.java",
+        "hytale/server/core/modules/interaction/interaction/config/none/simple/SendMessageInteraction.java",
+        "hytale/protocol/packets/interface_/ServerMessage.java",
+        "hytale/protocol/packets/interface_/OpenChatWithCommand.java",
+        "hytale/server/core/event/events/player/PlayerChatEvent.java",
+        "hytale/server/core/Message.java"
+      ],
+      "best_expected_rank": 4,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.25,
+      "negative_pass": null,
+      "elapsed_ms": 2779
+    },
+    {
+      "query": "open chat with prefilled command",
+      "expected_top_paths": [
+        "protocol/packets/interface_/OpenChatWithCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/protocol/packets/interface_/OpenChatWithCommand.java",
+        "hytale/server/core/command/system/pages/CommandListPage.java",
+        "hytale/protocol/packets/interface_/ChatMessage.java",
+        "hytale/server/core/event/events/player/PlayerChatEvent.java",
+        "hytale/protocol/packets/interface_/ChatTagType.java",
+        "hytale/protocol/packets/interface_/ChatType.java",
+        "hytale/builtin/buildertools/commands/StackCommand.java",
+        "hytale/builtin/buildertools/commands/UndoCommand.java",
+        "hytale/builtin/buildertools/commands/RedoCommand.java",
+        "hytale/builtin/buildertools/commands/MoveCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 2425
+    },
+    {
+      "query": "set the world spawn point",
+      "expected_top_paths": [
+        "universe/world/commands/worldconfig/WorldConfigSetSpawnCommand.java",
+        "core/asset/type/gameplay/respawn/WorldSpawnPoint.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/portals/ui/PortalDeviceSummonPage.java",
+        "hytale/server/core/asset/type/gameplay/respawn/WorldSpawnPoint.java",
+        "hytale/server/core/universe/world/spawn/FitToHeightMapSpawnProvider.java",
+        "hytale/server/core/universe/world/worldmap/markers/providers/SpawnMarkerProvider.java",
+        "hytale/server/core/universe/world/spawn/ISpawnProvider.java",
+        "hytale/server/spawning/SpawningPlugin.java",
+        "hytale/server/core/universe/world/spawn/IndividualSpawnProvider.java",
+        "hytale/server/spawning/SpawningContext.java",
+        "hytale/server/core/asset/type/gameplay/respawn/HomeOrSpawnPoint.java",
+        "hytale/server/core/universe/world/commands/worldconfig/WorldConfigSetSpawnDefaultCommand.java"
+      ],
+      "best_expected_rank": 2,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.5,
+      "negative_pass": null,
+      "elapsed_ms": 4366
+    },
+    {
+      "query": "check player permissions",
+      "expected_top_paths": [
+        "server/core/permissions/PermissionHolder.java",
+        "server/core/permissions/PermissionsModule.java",
+        "server/core/permissions/provider/PermissionProvider.java",
+        "server/core/permissions/HytalePermissions.java",
+        "server/core/permissions/commands/PermTestCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/modules/camera/FlyCameraModule.java",
+        "hytale/builtin/buildertools/BuilderToolsPacketHandler.java",
+        "hytale/server/core/modules/entity/condition/CheckPlayerGameModeCondition.java",
+        "hytale/builtin/asseteditor/AssetEditorGamePacketHandler.java",
+        "hytale/server/core/update/UpdateModule.java",
+        "hytale/server/core/permissions/commands/op/OpSelfCommand.java",
+        "hytale/builtin/mounts/commands/MountCheckCommand.java",
+        "hytale/builtin/buildertools/commands/RepairFillersCommand.java",
+        "hytale/server/core/entity/entities/Player.java",
+        "hytale/server/core/modules/singleplayer/commands/PlayCommandBase.java"
+      ],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": null,
+      "elapsed_ms": 3601
+    },
+    {
+      "query": "teleport command",
+      "expected_top_paths": [
+        "builtin/teleport/commands/teleport/TeleportCommand.java",
+        "builtin/teleport/TeleportPlugin.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/teleport/commands/teleport/TeleportCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportHistoryCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportAllCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportHomeCommand.java",
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportToPlayerCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportBackCommand.java",
+        "hytale/builtin/teleport/commands/teleport/variant/TeleportPlayerToCoordinatesCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportForwardCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportWorldCommand.java",
+        "hytale/builtin/teleport/commands/teleport/TeleportTopCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 59
+    },
+    {
+      "query": "block physics",
+      "expected_top_paths": [
+        "builtin/blockphysics/BlockPhysicsPlugin.java",
+        "builtin/blockphysics/BlockPhysicsSystems.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/blocktype/component/BlockPhysics.java",
+        "hytale/builtin/blockphysics/BlockPhysicsUtil.java",
+        "hytale/builtin/blockphysics/BlockPhysicsSystems.java",
+        "hytale/builtin/blockphysics/BlockPhysicsPlugin.java",
+        "hytale/server/core/universe/world/commands/block/BlockInspectPhysicsCommand.java",
+        "hytale/server/core/modules/physics/util/PhysicsFlags.java",
+        "hytale/server/core/modules/physics/SimplePhysicsProvider.java",
+        "hytale/server/core/modules/physics/component/PhysicsValues.java",
+        "hytale/server/core/modules/physics/util/PhysicsConstants.java",
+        "hytale/server/core/modules/physics/util/PhysicsMath.java"
+      ],
+      "best_expected_rank": 3,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.33333334,
+      "negative_pass": null,
+      "elapsed_ms": 43
+    },
+    {
+      "query": "world generation",
+      "expected_top_paths": [
+        "server/worldgen/HytaleWorldGenProvider.java",
+        "server/core/universe/world/worldgen/IWorldGen.java",
+        "builtin/worldgen/WorldGenPlugin.java",
+        "command/commands/world/worldgen/WorldGenCommand.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/schema/SchemaGenerator.java",
+        "hytale/server/core/universe/world/worldmap/provider/chunk/WorldGenWorldMapProvider.java",
+        "hytale/server/core/universe/world/worldgen/WorldGenTimingsCollector.java",
+        "hytale/server/core/universe/world/World.java",
+        "hytale/server/core/universe/world/WorldProvider.java",
+        "hytale/server/worldgen/map/GeneratorChunkWorldMap.java",
+        "hytale/server/core/universe/world/WorldConfig.java",
+        "hytale/server/core/universe/world/commands/world/WorldCommand.java",
+        "hytale/server/core/universe/world/worldgen/provider/IWorldGenProvider.java",
+        "hytale/server/core/config/WorldWorldMapConfig.java"
+      ],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": null,
+      "elapsed_ms": 38
+    },
+    {
+      "query": "spawn beacon system",
+      "expected_top_paths": [
+        "server/spawning/beacons/SpawnBeacon.java",
+        "server/spawning/beacons/SpawnBeaconSystems.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/spawning/local/LocalSpawnBeaconSystem.java",
+        "hytale/server/spawning/assets/spawns/config/BeaconNPCSpawn.java",
+        "hytale/server/spawning/beacons/SpawnBeaconSystems.java",
+        "hytale/builtin/adventure/npcobjectives/task/KillSpawnBeaconObjectiveTask.java",
+        "hytale/builtin/adventure/npcobjectives/assets/KillSpawnBeaconObjectiveTaskAsset.java",
+        "hytale/server/spawning/local/LocalSpawnControllerSystem.java",
+        "hytale/server/npc/systems/SpawnReferenceSystems.java",
+        "hytale/server/spawning/systems/BeaconSpatialSystem.java",
+        "hytale/server/spawning/commands/SpawnBeaconsCommand.java",
+        "hytale/builtin/adventure/npcobjectives/systems/SpawnBeaconCheckRemovalSystem.java"
+      ],
+      "best_expected_rank": 3,
+      "top1_hit": false,
+      "top3_hit": true,
+      "reciprocal_rank": 0.33333334,
+      "negative_pass": null,
+      "elapsed_ms": 4050
+    },
+    {
+      "query": "damage calculation",
+      "expected_top_paths": [
+        "interaction/config/server/combat/DamageCalculator.java",
+        "core/modules/entity/damage/DamageCalculatorSystems.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/modules/entity/damage/Damage.java",
+        "hytale/protocol/CalculationType.java",
+        "hytale/server/core/universe/world/lighting/CalculationResult.java",
+        "hytale/server/core/universe/world/lighting/LightCalculation.java",
+        "hytale/server/core/command/commands/utility/lighting/LightingCalculationCommand.java",
+        "hytale/server/core/modules/entity/damage/DamageSystems.java",
+        "hytale/server/core/universe/world/lighting/FloodLightCalculation.java",
+        "hytale/server/core/modules/entity/damage/DamageCalculatorSystems.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/combat/DamageCalculator.java",
+        "hytale/procedurallib/logic/cell/DistanceCalculationMode.java"
+      ],
+      "best_expected_rank": 8,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.125,
+      "negative_pass": null,
+      "elapsed_ms": 59
+    },
+    {
+      "query": "how do I listen for player chat",
+      "expected_top_paths": [
+        "server/core/event/events/player/PlayerChatEvent.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/event/events/player/PlayerChatEvent.java",
+        "hytale/protocol/packets/interface_/ChatType.java",
+        "hytale/protocol/packets/interface_/ChatMessage.java",
+        "hytale/server/core/modules/voice/commands/VoiceCommand.java",
+        "hytale/protocol/packets/interface_/ChatTagType.java",
+        "hytale/server/core/universe/world/npc/INonPlayerCharacter.java",
+        "hytale/server/core/io/handlers/game/GamePacketHandler.java",
+        "hytale/protocol/packets/interface_/OpenChatWithCommand.java",
+        "hytale/server/core/modules/voice/VoiceModule.java",
+        "hytale/server/core/console/command/SayCommand.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 42
+    },
+    {
+      "query": "what runs when a player joins a world",
+      "expected_top_paths": [
+        "server/core/event/events/player/AddPlayerToWorldEvent.java",
+        "protocol/packets/player/JoinWorld.java"
+      ],
+      "actual_top_paths": [
+        "hytale/builtin/instances/removal/WorldEmptyCondition.java",
+        "hytale/server/core/modules/entity/player/PlayerSystems.java",
+        "hytale/server/core/universe/world/World.java",
+        "hytale/builtin/creativehub/config/CreativeHubWorldConfig.java",
+        "hytale/builtin/buildertools/prefabeditor/PrefabEditSessionManager.java",
+        "hytale/protocol/packets/player/JoinWorld.java",
+        "hytale/server/npc/navigation/AStarBase.java",
+        "hytale/builtin/creativehub/CreativeHubPlugin.java",
+        "hytale/server/core/universe/Universe.java",
+        "hytale/builtin/portals/interactions/EnterPortalInteraction.java"
+      ],
+      "best_expected_rank": 6,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.16666667,
+      "negative_pass": null,
+      "elapsed_ms": 4340
+    },
+    {
+      "query": "where is the inventory packet handled",
+      "expected_top_paths": [
+        "core/io/handlers/game/InventoryPacketHandler.java"
+      ],
+      "actual_top_paths": [
+        "hytale/server/core/io/handlers/game/InventoryPacketHandler.java",
+        "hytale/server/core/io/ServerManager.java",
+        "hytale/server/core/inventory/container/FetchedItemContainer.java",
+        "hytale/protocol/packets/inventory/InventoryAction.java",
+        "hytale/protocol/packets/inventory/UpdatePlayerInventory.java",
+        "hytale/protocol/packets/inventory/SetActiveSlot.java",
+        "hytale/server/core/modules/interaction/interaction/config/server/ModifyInventoryInteraction.java",
+        "hytale/server/core/command/commands/player/inventory/InventoryCommand.java",
+        "hytale/protocol/packets/inventory/SetCreativeItem.java",
+        "hytale/server/core/modules/entity/player/PlayerSendInventorySystem.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 4555
+    },
+    {
+      "query": "send updated inventory to client",
+      "expected_top_paths": [
+        "protocol/packets/inventory/UpdatePlayerInventory.java",
+        "core/modules/entity/player/PlayerSendInventorySystem.java"
+      ],
+      "actual_top_paths": [
+        "hytale/protocol/packets/inventory/UpdatePlayerInventory.java",
+        "hytale/builtin/crafting/window/DiagramCraftingWindow.java",
+        "hytale/server/core/io/handlers/game/InventoryPacketHandler.java",
+        "hytale/builtin/adventure/shop/barter/BarterPage.java",
+        "hytale/server/core/modules/entity/player/PlayerSendInventorySystem.java",
+        "hytale/server/core/inventory/container/FetchedItemContainer.java",
+        "hytale/server/core/inventory/container/CombinedItemContainer.java",
+        "hytale/server/core/inventory/Inventory.java",
+        "hytale/server/core/inventory/InventorySystems.java",
+        "hytale/protocol/packets/inventory/InventoryAction.java"
+      ],
+      "best_expected_rank": 1,
+      "top1_hit": true,
+      "top3_hit": true,
+      "reciprocal_rank": 1.0,
+      "negative_pass": null,
+      "elapsed_ms": 4769
+    },
+    {
+      "query": "blarg",
+      "expected_top_paths": [],
+      "actual_top_paths": [],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": true,
+      "elapsed_ms": 48
+    },
+    {
+      "query": "xyzqwerty",
+      "expected_top_paths": [],
+      "actual_top_paths": [],
+      "best_expected_rank": null,
+      "top1_hit": false,
+      "top3_hit": false,
+      "reciprocal_rank": 0.0,
+      "negative_pass": true,
+      "elapsed_ms": 35
+    }
+  ]
+}

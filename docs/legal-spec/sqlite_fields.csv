@@ -1,0 +1,8 @@
+column_index,column_name,sql_type,nullable,example_value,description
+1,id,INTEGER,no (PRIMARY KEY AUTOINCREMENT),1,"row id, internal"
+2,class_fqn,TEXT,no,com.hytale.page.PageManager,"fully qualified name of the declaring class"
+3,name,TEXT,no,activePages,"field name"
+4,type_text,TEXT,no,java.util.List<com.hytale.page.Page>,"declared field type as written in source"
+5,modifiers,TEXT,no,"[""private"",""final""]","JSON array of Java modifiers"
+6,start_line,INTEGER,no,42,"1-based inclusive start line of the field declaration"
+7,end_line,INTEGER,no,42,"1-based inclusive end line of the field declaration"

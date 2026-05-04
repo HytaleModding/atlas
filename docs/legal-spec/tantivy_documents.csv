@@ -1,0 +1,13 @@
+field_index,field_name,role,tokenizer,example_value,description
+1,slot,stored,exact (STRING),release,"release or pre_release"
+2,source_type,stored,exact (STRING),source,"source | hm_doc | hypixel_doc | asset"
+3,path,stored,exact (STRING),com/hytale/page/PageManager.java,"relative file path"
+4,package,stored,code tokens (TEXT),com.hytale.page,"Java package"
+5,fqn,stored,code tokens (TEXT),com.hytale.page.PageManager,"fully qualified class name"
+6,filename,stored,code tokens (TEXT),PageManager,"class stem"
+7,symbol,stored,code tokens (TEXT),loadPage,"class or method name"
+8,chunk_kind,stored,exact (STRING),method,"type | method | file | doc"
+9,start_line,stored,uint64,142,"start line"
+10,end_line,stored,uint64,178,"end line"
+11,line_count,stored,uint64,412,"file total"
+12,content,indexed-only (NOT stored),code tokens (TEXT) over comment-and-string-stripped chunk,"(raw text never present in artifact; only an inverted index of identifiers + Java keywords + numeric literals)","raw chunk text is removed before tokenization (comments and string literal contents are stripped); only the resulting token stream is indexed for keyword search; the original text is discarded after tokenization and is never written to disk"

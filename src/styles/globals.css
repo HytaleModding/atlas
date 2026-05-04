@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Map design tokens into Tailwind's v4 theme so we can use
+ * bg-surface, text-fg-primary, etc. in utility classes.
+ */
+@theme {
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg-primary: var(--fg-primary);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-muted: var(--fg-muted);
+
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-primary-fg: var(--accent-primary-fg);
+
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+
+  --color-section-source: var(--section-source);
+  --color-section-guides: var(--section-guides);
+  --color-section-javadocs: var(--section-javadocs);
+  --color-section-assets: var(--section-assets);
+  --color-section-mydocs: var(--section-mydocs);
+
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+/* Base element styling.
+ * Sets the app-wide defaults that match ui-spec.md.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem; /* text-sm default for dense dev-tool UI */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Focus ring: accent-colored, visible on keyboard nav only. */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Selection highlight */
+::selection {
+  background-color: color-mix(in srgb, var(--accent-primary) 40%, transparent);
+  color: var(--fg-primary);
+}
+
+/* Find-in-page highlights. Two states:
+ *  - default: every match in the page, dim accent.
+ *  - active : the one the user is currently parked on; brighter +
+ *    outlined so it stands out among many matches.
+ */
+mark.atlas-find {
+  background-color: color-mix(in srgb, var(--accent-primary) 28%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+mark.atlas-find[data-active="true"] {
+  background-color: color-mix(in srgb, var(--accent-primary) 65%, transparent);
+  outline: 1px solid var(--accent-primary);
+  color: var(--fg-primary);
+}
+
+/* Dark themed scrollbars to match the app shell. The default OS bars
+ * are white-on-light and very jarring against the dark surfaces.
+ * Firefox uses scrollbar-* properties; Chromium/WebKit (Tauri's WebView2
+ * on Windows) uses ::-webkit-scrollbar pseudo-elements.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--fg-muted);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

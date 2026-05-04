@@ -1,0 +1,13 @@
+column_index,column_name,data_type,nullable,example_value,description
+1,slot,string (Utf8),no,release,"release or pre_release; identifies which Hytale build this row indexes"
+2,source_type,string (Utf8),no,source,"one of: source | hm_doc | hypixel_doc | asset"
+3,path,string (Utf8),no,com/hytale/page/PageManager.java,"forward-slash relative path within the decompile tree"
+4,package,string (Utf8),no,com.hytale.page,"Java package, dotted; empty string for non-source rows"
+5,fqn,string (Utf8),no,com.hytale.page.PageManager,"fully qualified class name; empty string for non-source rows"
+6,filename,string (Utf8),no,PageManager,"class stem without .java; for docs the markdown filename stem"
+7,symbol,string (Utf8),no,loadPage,"chunk's primary symbol: class or method name; for docs the H1 heading text"
+8,chunk_kind,string (Utf8),no,method,"one of: type | method | file | doc"
+9,start_line,uint64,no,142,"1-based inclusive start line within the source file"
+10,end_line,uint64,no,178,"1-based inclusive end line within the source file"
+11,line_count,uint64,no,412,"total line count of the source file (UI display)"
+12,embedding,float32[384] FixedSizeList,no,"[0.0123, -0.0451, 0.0892, ... 384 floats]","384-dimensional sentence-transformer vector; one-way, not reversible to source"

@@ -1,0 +1,71 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Tauri
+/src-tauri/target
+/src-tauri/gen
+/src-tauri/WixTools
+
+# Node / frontend
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.turbo
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea
+*.iml
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Atlas local data (decompiled sources, indexes, cached docs)
+# These are large and machine-specific. Never commit.
+/workspace/
+/indexes/
+/cache/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+secrets.toml
+
+# Build artifacts
+*.jar
+*.zip
+*.tar.gz
+!docs/**/*.zip
+
+# Eval and summary caches (large, machine-specific)
+/eval-staging/
+/src-tauri/eval-staging/
+/src-tauri/eval-staging-v2/
+/.summary-cache/
