@@ -1,0 +1,106 @@
+name: release-app
+
+# Builds the Atlas desktop app (Tauri) installers on every push of a
+# `v*` tag and uploads them as assets on a GitHub Release with that tag.
+# Triggered manually via workflow_dispatch as well, useful while bedding
+# this workflow in.
+#
+# Outputs (per OS, attached to the same Release):
+#   - Windows:  Atlas_<version>_x64-setup.exe  +  Atlas_<version>_x64_en-US.msi
+#   - macOS:    Atlas_<version>_x64.dmg        +  Atlas.app.tar.gz (universal)
+#   - Linux:    atlas_<version>_amd64.AppImage +  atlas_<version>_amd64.deb
+#
+# This workflow is what makes a Hytale-modder install of Atlas a
+# one-click experience: tag, push, ten minutes later the Release page
+# has clickable installers for every desktop OS. No local build, no
+# manual upload.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (created if it does not exist, e.g. v0.1.0)."
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # needed to create the Release + upload assets
+
+concurrency:
+  # One release build per tag at a time. A second push of the same tag
+  # waits for the first to finish (queueing rather than racing avoids
+  # half-uploaded asset sets).
+  group: release-app-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        if: matrix.platform.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform.target }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build + upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: "Atlas ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseBody: |
+            Atlas ${{ github.event.inputs.tag || github.ref_name }}.
+
+            Download the installer for your OS below. Atlas fetches
+            its reference data from the central index repository on
+            first launch - no local build or decompile required.
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.platform.target }}
