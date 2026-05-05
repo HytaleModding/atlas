@@ -97,7 +97,12 @@ jobs:
 
       - name: Build atlas-build
         working-directory: src-tauri
-        run: cargo build --release --bin atlas-build
+        # `-p atlas-build` selects the standalone CLI workspace member
+        # at `crates/atlas-build/`. Splitting it out of the Tauri app
+        # crate (where it used to live as a `[[bin]]` target) means CI
+        # no longer compiles the Tauri shell + GUI deps just to get
+        # the headless pipeline binary.
+        run: cargo build --release -p atlas-build
 
       - name: Download Hytale server JAR
         run: |

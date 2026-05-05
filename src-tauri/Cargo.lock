@@ -642,6 +642,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atlas-build"
+version = "0.1.6"
+dependencies = [
+ "anyhow",
+ "atlas",
+ "clap",
+ "ed25519-dalek",
+ "hex",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "atoi"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
