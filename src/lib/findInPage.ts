@@ -10,8 +10,8 @@
  *      tree), and javadoc text: anything React already rendered.
  *    - Doesn't require knowing how the renderer structured the DOM;
  *      we just look at text nodes.
- *    - Highlights survive React re-renders gracefully because we
- *      always clear-then-rewrap on every `query`/content change.
+ *    - Highlights survive React re-renders because we always
+ *      clear-then-rewrap on every `query`/content change.
  *
  *  Caveats:
  *    - Wrapping mutates the DOM, so React thinks the tree is dirty.

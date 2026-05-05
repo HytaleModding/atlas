@@ -67,7 +67,7 @@ export type DiffReport = {
 /** Run the diff. Synchronous from the frontend's POV - the backend
  *  resolves project source + symbols.sqlite paths and returns the full
  *  report in one round-trip. */
-export async function diffRun(args: {
+export function diffRun(args: {
   projectId: string;
   baselineBuildId: string;
   targetBuildId: string;

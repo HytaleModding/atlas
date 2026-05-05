@@ -77,7 +77,7 @@ export type SearchHit = {
   /** Frontend-only marker set by SearchPage's Javadoc-fold pass when a
    *  source row was synthesized from a Javadoc-only match (the Javadoc
    *  text was the actual scorer, but we surface the source file because
-   *  the user wants to read the implementation).. */
+   *  the user wants to read the implementation). */
   matchedIn?: "javadoc";
   /** Comma-joined author names for HM guide hits, pulled from the doc
    *  frontmatter at index time. Absent on every other section. */
@@ -91,23 +91,23 @@ export type SearchResponse = {
   elapsed_ms: number;
 };
 
-export async function getIndexOverview(): Promise<IndexOverview> {
+export function getIndexOverview(): Promise<IndexOverview> {
   return invoke<IndexOverview>("index_overview");
 }
 
-export async function getIndexStatus(): Promise<IndexerStatus> {
+export function getIndexStatus(): Promise<IndexerStatus> {
   return invoke<IndexerStatus>("index_status");
 }
 
-export async function startIndex(slot: Slot): Promise<void> {
-  await invoke<void>("index_start", { slot });
+export function startIndex(slot: Slot): Promise<void> {
+  return invoke<void>("index_start", { slot });
 }
 
-export async function clearIndex(slot: Slot): Promise<void> {
-  await invoke<void>("clear_index", { slot });
+export function clearIndex(slot: Slot): Promise<void> {
+  return invoke<void>("clear_index", { slot });
 }
 
-export async function runSearch(
+export function runSearch(
   slot: Slot,
   query: string,
   limit?: number,
@@ -121,7 +121,7 @@ export async function runSearch(
   });
 }
 
-export async function readSource(
+export function readSource(
   slot: Slot,
   path: string,
   sourceType: string,
@@ -234,7 +234,7 @@ export function prefetchHit(hit: SearchHit): void {
  *
  *  HM markdown docs and assets have no source pair, those source_types
  *  always resolve to null. */
-export async function findSibling(
+export function findSibling(
   slot: Slot,
   fqn: string,
   sourceType: string,
@@ -247,7 +247,7 @@ export async function findSibling(
  *  Used by the SearchPage post-processing step that folds Javadoc-only
  *  hits into their source rows so the result list never shows a docs
  *  hit when source is available. Missing siblings come back as `null`. */
-export async function findSourceSiblings(
+export function findSourceSiblings(
   slot: Slot,
   fqns: string[],
 ): Promise<Record<string, SearchHit | null>> {
@@ -274,7 +274,7 @@ export type InlineJavadoc = {
  *  source-side line numbers so the viewer can render a Javadoc box
  *  above each documented method declaration. Returns `[]` when no
  *  Javadoc is cached for the class. */
-export async function getInlineJavadocs(
+export function getInlineJavadocs(
   slot: Slot,
   classFqn: string,
 ): Promise<InlineJavadoc[]> {

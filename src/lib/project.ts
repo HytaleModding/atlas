@@ -24,28 +24,28 @@ export type ProjectProgressPayload = {
 export type ProjectDonePayload = { project_id: string; docs: number };
 export type ProjectErrorPayload = { project_id: string; message: string };
 
-export async function projectRegister(
+export function projectRegister(
   path: string,
   name?: string,
 ): Promise<string> {
   return invoke<string>("project_register", { path, name });
 }
 
-export async function projectList(): Promise<ProjectListEntry[]> {
+export function projectList(): Promise<ProjectListEntry[]> {
   return invoke<ProjectListEntry[]>("project_list");
 }
 
-export async function projectUnregister(id: string): Promise<void> {
-  await invoke("project_unregister", { id });
+export function projectUnregister(id: string): Promise<void> {
+  return invoke<void>("project_unregister", { id });
 }
 
-export async function projectRemoveIndex(id: string): Promise<void> {
-  await invoke("project_remove_index", { id });
+export function projectRemoveIndex(id: string): Promise<void> {
+  return invoke<void>("project_remove_index", { id });
 }
 
 /** Kicks off a project index run; returns immediately. Subscribe to
  *  `project:phase` / `project:progress` / `project:done` / `project:error`
  *  to follow progress. */
-export async function projectIndex(id: string): Promise<void> {
-  await invoke("project_index", { id });
+export function projectIndex(id: string): Promise<void> {
+  return invoke<void>("project_index", { id });
 }

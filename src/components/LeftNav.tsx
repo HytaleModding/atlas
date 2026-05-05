@@ -95,8 +95,8 @@ export function LeftNav() {
 }
 
 /** Sits just above the Settings row. Opens the feedback modal in
- *  Search Tuning mode by default since that's the higher-leverage path
- *  (every report becomes a labeled tuning case we can act on). */
+ *  Search Tuning mode by default so every report becomes a labeled
+ *  tuning case we can act on. */
 function FeedbackRow() {
   const show = useFeedbackStore((s) => s.show);
   return (

@@ -29,15 +29,15 @@ export type HytalePathCheck = {
   reason: string | null;
 };
 
-export async function loadConfig(): Promise<ConfigSnapshot> {
+export function loadConfig(): Promise<ConfigSnapshot> {
   return invoke<ConfigSnapshot>("load_config");
 }
 
-export async function saveConfig(config: AtlasConfig): Promise<void> {
-  await invoke<void>("save_config", { config });
+export function saveConfig(config: AtlasConfig): Promise<void> {
+  return invoke<void>("save_config", { config });
 }
 
-export async function validateHytalePath(path: string): Promise<HytalePathCheck> {
+export function validateHytalePath(path: string): Promise<HytalePathCheck> {
   return invoke<HytalePathCheck>("validate_hytale_path", { path });
 }
 

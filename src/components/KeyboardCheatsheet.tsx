@@ -5,7 +5,7 @@ import { useUIPrefsStore } from "@/state/uiPrefsStore";
 /** Keyboard shortcut reference modal opened with `?`. Lists every binding
  *  registered through `useKeymap` so the user can discover search-page
  *  navigation, find-in-page, viewer history, and section toggles without
- *  rummaging through docs.. */
+ *  rummaging through docs. */
 export function KeyboardCheatsheet({
   open,
   onClose,

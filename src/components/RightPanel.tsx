@@ -36,7 +36,7 @@ import { TabBar } from "./TabBar";
 import { useTabsStore } from "@/state/tabsStore";
 
 /** Source section → CSS variable name, used to tint the preview-line band
- *  and the find-overlay border.. */
+ *  and the find-overlay border. */
 function sectionVar(sourceType: string): string {
   switch (sourceType) {
     case "hm_doc":

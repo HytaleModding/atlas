@@ -6,7 +6,6 @@ import type { EditorProtocol } from "@/state/uiPrefsStore";
  *  none:    null (caller should hide the trigger entirely)
  *
  *  Returns null when the protocol is "none" or when `path` is empty.
- * .
  */
 export function editorUrl(
   protocol: EditorProtocol,

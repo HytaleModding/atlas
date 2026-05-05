@@ -25,7 +25,7 @@ export type CompareReport = {
 /** Run a corpus-wide compare between two mounted Hytale versions. The
  *  payload is symmetric difference at class level - fast even on full
  *  Hytale builds because all the work is one SQL query per side. */
-export async function indexCompare(args: {
+export function indexCompare(args: {
   baselineBuildId: string;
   targetBuildId: string;
 }): Promise<CompareReport> {

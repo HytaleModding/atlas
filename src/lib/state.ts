@@ -25,7 +25,7 @@ export type RecentFile = {
   opened_at: string;
 };
 
-export async function pinAdd(
+export function pinAdd(
   kind: PinKind,
   target: string,
   buildId: string | null = null,
@@ -39,29 +39,29 @@ export async function pinAdd(
   });
 }
 
-export async function pinRemove(id: number): Promise<void> {
-  await invoke<void>("state_pin_remove", { id });
+export function pinRemove(id: number): Promise<void> {
+  return invoke<void>("state_pin_remove", { id });
 }
 
-export async function pinList(): Promise<Pin[]> {
+export function pinList(): Promise<Pin[]> {
   return invoke<Pin[]>("state_pin_list");
 }
 
-export async function noteSet(pinId: number, body: string): Promise<void> {
-  await invoke<void>("state_note_set", { pinId, body });
+export function noteSet(pinId: number, body: string): Promise<void> {
+  return invoke<void>("state_note_set", { pinId, body });
 }
 
-export async function noteGet(pinId: number): Promise<string | null> {
+export function noteGet(pinId: number): Promise<string | null> {
   return invoke<string | null>("state_note_get", { pinId });
 }
 
-export async function recordRecentFile(
+export function recordRecentFile(
   path: string,
   buildId: string,
 ): Promise<void> {
-  await invoke<void>("state_recent_file_record", { path, buildId });
+  return invoke<void>("state_recent_file_record", { path, buildId });
 }
 
-export async function listRecentFiles(): Promise<RecentFile[]> {
+export function listRecentFiles(): Promise<RecentFile[]> {
   return invoke<RecentFile[]>("state_recent_files");
 }
