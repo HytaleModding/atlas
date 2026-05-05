@@ -1,0 +1,139 @@
+name: build-app
+
+# Builds the Atlas desktop installers on every push to `main` and on
+# every pull request that touches the app, and uploads the bundles as
+# GitHub Actions *artifacts* (NOT a Release).
+#
+# Why this exists, separately from `release-app.yml`:
+#   - `release-app.yml` triggers on `v*` tags. That means the only way
+#     to get a real installer to smoke-test was to tag, push, and hope.
+#     Catching a regression after the tag was already public meant
+#     yanking the release and re-tagging.
+#   - This workflow runs on every push, so the smoke-test loop is
+#     "merge to main → download artifact from the run → install →
+#     work through SMOKE_TESTS.md → tag only if it passes". No public
+#     Release is created until the bundles have actually been driven.
+#
+# Artifacts attached to each run:
+#   - Windows:  Atlas_<version>_x64-setup.exe + Atlas_<version>_x64_en-US.msi
+#   - macOS:    Atlas_<version>_aarch64.dmg   + Atlas.app.tar.gz
+#   - Linux:    atlas_<version>_amd64.AppImage + atlas_<version>_amd64.deb
+#
+# Artifacts are kept for 14 days (default Actions retention overrides
+# below). Long enough to grab last week's build for a comparison test,
+# short enough not to balloon storage.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - ".github/workflows/build-app.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - ".github/workflows/build-app.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  # One smoke-test build per ref at a time. New pushes cancel in-flight
+  # builds for the same ref - if you push a fix, you don't care about
+  # the older build's bundles.
+  group: build-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: atlas-windows-x64
+            bundle_glob: |
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: atlas-macos-aarch64
+            bundle_glob: |
+              src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact_name: atlas-linux-amd64
+            bundle_glob: |
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        if: matrix.platform.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform.target }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build Tauri bundle
+        run: npx tauri build --target ${{ matrix.platform.target }}
+
+      - name: Upload installers as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.artifact_name }}
+          path: ${{ matrix.platform.bundle_glob }}
+          if-no-files-found: error
+          retention-days: 14

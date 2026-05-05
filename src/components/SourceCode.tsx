@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode, type Ref } from "react";
 import type { ThemedToken } from "shiki";
-import { createHighlighter, type BundledLanguage, type Highlighter } from "shiki";
+import { ensureHighlighter, SHIKI_THEME, type SupportedLang } from "@/lib/shiki";
 import { cn } from "@/lib/utils";
 
 /** A pre-rendered React node to splice into the source render at a given
@@ -12,50 +12,10 @@ export type InlineAnchor = {
   node: ReactNode;
 };
 
-/** Singleton highlighter; first use loads the WASM and the Java grammar.
- *  Subsequent calls reuse it across all SourceCode mounts. */
-let cached: Highlighter | null = null;
-let cachedPromise: Promise<Highlighter> | null = null;
-
-const SUPPORTED_LANGS: BundledLanguage[] = [
-  "java",
-  "json",
-  "javascript",
-  "typescript",
-  "tsx",
-  "kotlin",
-  "rust",
-  "python",
-  "bash",
-  "yaml",
-  "toml",
-  "xml",
-  "html",
-  "css",
-  "scala",
-  "groovy",
-];
-
-const THEME = "github-dark-default";
-
-async function ensureHighlighter(): Promise<Highlighter> {
-  if (cached) return cached;
-  if (!cachedPromise) {
-    cachedPromise = createHighlighter({
-      themes: [THEME],
-      langs: SUPPORTED_LANGS,
-    }).then((h) => {
-      cached = h;
-      return h;
-    });
-  }
-  return cachedPromise;
-}
-
 /** Map a file path's extension to a shiki language id. Falls back to
  *  `java` for the common case (decompiled source) and `text` for
  *  unknown extensions, which renders without highlighting. */
-export function langForPath(path: string): BundledLanguage | "text" {
+export function langForPath(path: string): SupportedLang | "text" {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   switch (ext) {
     case "java":
@@ -121,7 +81,7 @@ export function SourceCode({
 }: {
   content: string;
   /** Shiki language id. Pass `"text"` to skip highlighting. */
-  language: BundledLanguage | "text";
+  language: SupportedLang | "text";
   previewLine: number | null;
   previewRef?: Ref<HTMLSpanElement>;
   /** Pre-rendered nodes to splice in before specific lines. */
@@ -150,7 +110,7 @@ export function SourceCode({
         try {
           const result = h.codeToTokens(content, {
             lang: language,
-            theme: THEME,
+            theme: SHIKI_THEME,
           });
           setTokens(result.tokens);
         } catch {

@@ -60,6 +60,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # `atlas-build` is a separate bin target inside the Tauri crate, so
+      # cargo still compiles `atlas_lib` along with its transitive Tauri /
+      # webkit2gtk / glib-2.0 system-library deps even though the CLI never
+      # opens a window. Without these packages the runner fails at
+      # `glib-sys` build with `Package 'glib-2.0' was not found`. Mirrors
+      # the deps installed in `release-app.yml`.
+      - name: Install Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
