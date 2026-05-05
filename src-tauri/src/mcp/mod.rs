@@ -178,10 +178,6 @@ pub struct GetSourceOutput {
     pub truncated: bool,
 }
 
-// Phase-4 stub: fields wired into the public schema now (so the contract
-// version stays stable across 3→4) but not consumed until the docs/assets
-// readers land. `allow(dead_code)` keeps the compiler quiet in the meantime.
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDocParams {
     pub path: String,
@@ -190,7 +186,6 @@ pub struct GetDocParams {
     pub build_id: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetAssetParams {
     pub path: String,
@@ -198,11 +193,9 @@ pub struct GetAssetParams {
     pub build_id: Option<String>,
 }
 
-/// Contract-shaped output for `get_doc`. The handler currently errors
-/// with `SourceTypeNotIndexed` until doc retrieval is wired up, but the
-/// schemars-derived schema is what clients see in `list_tools`, so it
-/// must match `docs/mcp-contract.md` § `get_doc`.
-#[allow(dead_code)]
+/// Contract-shaped output for `get_doc`. The schemars-derived schema is
+/// what clients see in `list_tools`, so it must match `docs/mcp-contract.md`
+/// § `get_doc`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct GetDocOutput {
     pub path: String,
@@ -212,9 +205,8 @@ pub struct GetDocOutput {
     pub content: String,
 }
 
-/// Contract-shaped output for `get_asset`. Same caveat as
-/// `GetDocOutput` until asset ingestion is wired up.
-#[allow(dead_code)]
+/// Contract-shaped output for `get_asset`. The handler currently errors
+/// with `SourceTypeNotIndexed` until asset ingestion is wired up.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct GetAssetOutput {
     pub path: String,
@@ -306,18 +298,18 @@ impl AtlasTools {
                 None
             }
         };
-        let embedder_instance: Option<Arc<dyn crate::embedder::Embedder>> =
-            if lance_store.is_some() {
-                match self.state.embedder.get_or_init(model_cache) {
-                    Ok(e) => Some(e),
-                    Err(err) => {
-                        tracing::warn!(?err, "embedder load failed for mcp search");
-                        None
-                    }
+        let embedder_instance: Option<Arc<dyn crate::embedder::Embedder>> = if lance_store.is_some()
+        {
+            match self.state.embedder.get_or_init(model_cache) {
+                Ok(e) => Some(e),
+                Err(err) => {
+                    tracing::warn!(?err, "embedder load failed for mcp search");
+                    None
                 }
-            } else {
-                None
-            };
+            }
+        } else {
+            None
+        };
         let partial = embedder_instance.is_none();
 
         let start = std::time::Instant::now();
@@ -380,8 +372,8 @@ impl AtlasTools {
         }
         let slot = resolve_slot(&params.build_id)?;
         let build_id = slot_build_id(slot, &params.build_id);
-        let decompile_dir = crate::patcher::workspace_for(&self.state.data_dir, slot)
-            .join("decompile");
+        let decompile_dir =
+            crate::patcher::workspace_for(&self.state.data_dir, slot).join("decompile");
         let full = indexer::read_source(&decompile_dir, &params.path)
             .map_err(|err| contract_error("SourceNotFound", &format!("{err:#}")))?;
         let line_count = full.lines().count() as u64;
@@ -395,8 +387,7 @@ impl AtlasTools {
                     .take(end.saturating_sub(start - 1))
                     .collect::<Vec<_>>()
                     .join("\n");
-                let truncated =
-                    (start as u64) > 1 || (end as u64) < line_count;
+                let truncated = (start as u64) > 1 || (end as u64) < line_count;
                 (clipped, truncated)
             }
             _ => (full, false),
@@ -440,8 +431,7 @@ impl AtlasTools {
         // Hypixel pages are HTML; render through the same parser the
         // indexer used so MCP clients receive prose, not markup soup.
         let content = if params.source_type == "hypixel_doc" {
-            indexer::hypixel_docs::render_class_page(&params.path, &raw)
-                .unwrap_or(raw)
+            indexer::hypixel_docs::render_class_page(&params.path, &raw).unwrap_or(raw)
         } else {
             raw
         };
@@ -492,10 +482,7 @@ impl AtlasTools {
             .as_deref()
             .map(|k| {
                 SymbolKind::from_str(k).ok_or_else(|| {
-                    contract_error(
-                        "InvalidQuery",
-                        &format!("unknown symbol kind `{k}`"),
-                    )
+                    contract_error("InvalidQuery", &format!("unknown symbol kind `{k}`"))
                 })
             })
             .transpose()?;

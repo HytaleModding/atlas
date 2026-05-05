@@ -89,8 +89,8 @@ pub fn walk_docs(repo_dir: &Path) -> Result<Vec<DocFile>> {
                 }
             }
         }
-        let body = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let body =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let title = extract_title(&body)
             .or_else(|| path.file_stem().and_then(|s| s.to_str()).map(String::from))
             .unwrap_or_else(|| "untitled".into());
@@ -116,15 +116,14 @@ pub fn walk_docs(repo_dir: &Path) -> Result<Vec<DocFile>> {
 /// the inner text (without the leading/trailing `---` fences). `None`
 /// if the body doesn't open with `---`.
 fn extract_frontmatter(body: &str) -> Option<&str> {
-    let rest = body.strip_prefix("---\n").or_else(|| body.strip_prefix("---\r\n"))?;
+    let rest = body
+        .strip_prefix("---\n")
+        .or_else(|| body.strip_prefix("---\r\n"))?;
     // Find the closing fence at the start of a line.
     let mut search_start = 0usize;
     while search_start < rest.len() {
         let slice = &rest[search_start..];
-        if slice.starts_with("---\n")
-            || slice.starts_with("---\r\n")
-            || slice == "---"
-        {
+        if slice.starts_with("---\n") || slice.starts_with("---\r\n") || slice == "---" {
             return Some(&rest[..search_start]);
         }
         let next_nl = match slice.find('\n') {
@@ -264,10 +263,7 @@ mod tests {
     #[test]
     fn extracts_authors_array_with_links() {
         let body = "---\ntitle: \"Block Components\"\nauthors:\n    - name: \"Bird\"\n      link: \"https://example.com\"\n    - name: \"oskarscot\"\n      link: \"https://oskar.scot\"\n---\n\n# Overview\n";
-        assert_eq!(
-            extract_authors(body).as_deref(),
-            Some("Bird, oskarscot"),
-        );
+        assert_eq!(extract_authors(body).as_deref(), Some("Bird, oskarscot"),);
     }
 
     #[test]
@@ -330,11 +326,21 @@ mod tests {
         // Repo-level files outside content/docs are always kept.
         fs::write(dir.path().join("README.md"), "# Repo\n").unwrap();
         // English content kept.
-        let en_dir = dir.path().join("content").join("docs").join("en").join("guides");
+        let en_dir = dir
+            .path()
+            .join("content")
+            .join("docs")
+            .join("en")
+            .join("guides");
         fs::create_dir_all(&en_dir).unwrap();
         fs::write(en_dir.join("camera.mdx"), "# Camera\n").unwrap();
         // Translation skipped.
-        let de_dir = dir.path().join("content").join("docs").join("de").join("guides");
+        let de_dir = dir
+            .path()
+            .join("content")
+            .join("docs")
+            .join("de")
+            .join("guides");
         fs::create_dir_all(&de_dir).unwrap();
         fs::write(de_dir.join("camera.mdx"), "# Kamera\n").unwrap();
 

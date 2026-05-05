@@ -154,28 +154,33 @@ async fn run_fetch(
     let app_for_download = app.clone();
     let build_id_for_download = build_id.clone();
     let mut last_emit_bytes: u64 = 0;
-    download::download(&client, &dl_req, progress.clone(), move |received, total| {
-        status_for_download.set(FetchStatus::Downloading {
-            build_id: build_id_for_download.clone(),
-            received,
-            total,
-        });
-        // Throttle IPC to ~every 128 KiB to avoid flooding the bus.
-        if received.saturating_sub(last_emit_bytes) > 128 * 1024
-            || total.is_some_and(|t| received == t)
-        {
-            last_emit_bytes = received;
-            let _ = app_for_download.emit(
-                "fetch:progress",
-                serde_json::json!({
-                    "buildId": build_id_for_download,
-                    "phase": FetchPhase::Downloading.as_str(),
-                    "received": received,
-                    "total": total,
-                }),
-            );
-        }
-    })
+    download::download(
+        &client,
+        &dl_req,
+        progress.clone(),
+        move |received, total| {
+            status_for_download.set(FetchStatus::Downloading {
+                build_id: build_id_for_download.clone(),
+                received,
+                total,
+            });
+            // Throttle IPC to ~every 128 KiB to avoid flooding the bus.
+            if received.saturating_sub(last_emit_bytes) > 128 * 1024
+                || total.is_some_and(|t| received == t)
+            {
+                last_emit_bytes = received;
+                let _ = app_for_download.emit(
+                    "fetch:progress",
+                    serde_json::json!({
+                        "buildId": build_id_for_download,
+                        "phase": FetchPhase::Downloading.as_str(),
+                        "received": received,
+                        "total": total,
+                    }),
+                );
+            }
+        },
+    )
     .await?;
 
     // --- Phases: Verifying + Extracting + Mounting ----------------------
@@ -217,8 +222,7 @@ async fn run_fetch(
             }),
         );
 
-        let mounted =
-            verify_and_mount(&dest_for_blocking, &indexes_root_for_blocking, &sink)?;
+        let mounted = verify_and_mount(&dest_for_blocking, &indexes_root_for_blocking, &sink)?;
 
         status_for_blocking.set(FetchStatus::Phase {
             build_id: build_id_for_blocking.clone(),
@@ -384,11 +388,7 @@ async fn run_mount_local(
             }),
         );
 
-        let mounted = verify_and_mount(
-            &tarball_for_blocking,
-            &indexes_root_for_blocking,
-            &sink,
-        )?;
+        let mounted = verify_and_mount(&tarball_for_blocking, &indexes_root_for_blocking, &sink)?;
 
         status_for_blocking.set(FetchStatus::Phase {
             build_id: provisional_for_blocking.clone(),

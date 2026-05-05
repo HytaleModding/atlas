@@ -109,9 +109,7 @@ async fn run_decompile(
         .await
         .with_context(|| format!("stat {}", server_jar.display()))?;
     let jar_size = jar_meta.len();
-    let jar_mtime = jar_meta
-        .modified()
-        .unwrap_or_else(|_| SystemTime::now());
+    let jar_mtime = jar_meta.modified().unwrap_or_else(|_| SystemTime::now());
 
     // --- Capture Hytale version from the manifest -----------------------
     let hytale_version = {
@@ -208,7 +206,8 @@ pub struct ExtractProgress {
 
 impl extract::ProgressSink for ExtractProgress {
     fn report(&self, current: usize, total: usize) {
-        self.status.set(PatcherStatus::Extracting { current, total });
+        self.status
+            .set(PatcherStatus::Extracting { current, total });
         // Only emit every ~1% or every 50 files to avoid flooding the IPC bus.
         if total == 0
             || current == total
@@ -289,10 +288,7 @@ pub fn build_slot_overview(
     let (jar_size, jar_mtime) = match jar_path.as_ref().filter(|p| p.is_file()) {
         Some(p) => match std::fs::metadata(p) {
             Ok(m) => {
-                let mtime = m
-                    .modified()
-                    .ok()
-                    .map(format_iso8601);
+                let mtime = m.modified().ok().map(format_iso8601);
                 (Some(m.len()), mtime)
             }
             Err(_) => (None, None),

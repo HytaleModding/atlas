@@ -54,7 +54,7 @@ pub async fn run(
 
     let fetch = limit.saturating_mul(OVERFETCH).max(limit);
 
- // --- Tantivy leg (blocking) ----------------------------------------
+    // --- Tantivy leg (blocking) ----------------------------------------
     let bm25_hits = {
         let catalog = catalog.clone();
         let index_dir = index_dir.to_path_buf();
@@ -67,19 +67,17 @@ pub async fn run(
         .context("tantivy task panicked")??
     };
 
- // --- Lance leg (async) - skip if either piece is missing -----------
+    // --- Lance leg (async) - skip if either piece is missing -----------
     let sem_hits: Vec<SemanticHit> = match (lance_store, embedder) {
         (Some(store), Some(emb)) => {
             let q = trimmed.to_string();
- // fastembed is sync + CPU-bound - run on a blocking thread so
- // it doesn't block the runtime.
+            // fastembed is sync + CPU-bound - run on a blocking thread so
+            // it doesn't block the runtime.
             let emb_clone = emb.clone();
-            let vectors = tokio::task::spawn_blocking(move || {
-                emb_clone.embed_batch(&[q.as_str()])
-            })
-            .await
-            .context("embed task panicked")?
-            .context("embedding query")?;
+            let vectors = tokio::task::spawn_blocking(move || emb_clone.embed_batch(&[q.as_str()]))
+                .await
+                .context("embed task panicked")?
+                .context("embedding query")?;
             let q_vec = vectors
                 .first()
                 .ok_or_else(|| anyhow::anyhow!("embedder returned no vectors"))?;
@@ -93,14 +91,7 @@ pub async fn run(
     let (w_bm25, w_vec) = pick_weights(trimmed, !sem_hits.is_empty());
     let sem_distances: Vec<f32> = sem_hits.iter().map(|h| h.distance).collect();
 
-    let mut out = rrf_blend(
-        bm25_hits,
-        sem_hits,
-        sem_distances,
-        w_bm25,
-        w_vec,
-        limit,
-    );
+    let mut out = rrf_blend(bm25_hits, sem_hits, sem_distances, w_bm25, w_vec, limit);
     out.truncate(limit);
     Ok(out)
 }
@@ -131,11 +122,11 @@ fn pick_weights(query: &str, has_semantic: bool) -> (f32, f32) {
     };
     let has_uppercase = |t: &str| t.chars().any(|c| c.is_ascii_uppercase());
 
- // Code-shaped: has caps OR contains a separator/sigil that English
- // words don't (`_`, `.`, `$`). Lowercase English words slip past
- // `identifier_like` because they're alphanumeric, so without this
- // check NL queries like "send a chat message" never trip the
- // vector-favoring branch below.
+    // Code-shaped: has caps OR contains a separator/sigil that English
+    // words don't (`_`, `.`, `$`). Lowercase English words slip past
+    // `identifier_like` because they're alphanumeric, so without this
+    // check NL queries like "send a chat message" never trip the
+    // vector-favoring branch below.
     let code_shaped = |t: &str| -> bool {
         has_uppercase(t) || t.contains('_') || t.contains('.') || t.contains('$')
     };
@@ -144,20 +135,20 @@ fn pick_weights(query: &str, has_semantic: bool) -> (f32, f32) {
     let any_caps = tokens.iter().any(|t| has_uppercase(t));
     let all_code_shaped = tokens.iter().all(|t| code_shaped(t));
 
- // Symbol-shaped: 1-2 identifier-like tokens, or anything camelCase.
- // Lean hard on BM25 - vectors tend to pull in near-synonyms which
- // dilute an exact-name lookup.
+    // Symbol-shaped: 1-2 identifier-like tokens, or anything camelCase.
+    // Lean hard on BM25 - vectors tend to pull in near-synonyms which
+    // dilute an exact-name lookup.
     if all_ids && (any_caps || tokens.len() <= 2) {
         return (2.0, 1.0);
     }
 
- // Natural-language-shaped: 3+ tokens that aren't all code-shaped.
- // Lean on the vector ranker - semantic similarity shines here.
+    // Natural-language-shaped: 3+ tokens that aren't all code-shaped.
+    // Lean on the vector ranker - semantic similarity shines here.
     if tokens.len() >= 3 && !all_code_shaped {
         return (1.0, 2.0);
     }
 
- // Mixed / unclear - even split.
+    // Mixed / unclear - even split.
     (1.0, 1.0)
 }
 
@@ -186,9 +177,7 @@ fn rrf_blend(
         vector_rank: Option<u32>,
         vector_distance: Option<f32>,
     }
-    let key = |slot: &str, path: &str, start: u64| -> String {
-        format!("{slot}\0{path}\0{start}")
-    };
+    let key = |slot: &str, path: &str, start: u64| -> String { format!("{slot}\0{path}\0{start}") };
 
     let mut acc: HashMap<String, Acc> = HashMap::new();
 
@@ -234,10 +223,10 @@ fn rrf_blend(
             });
     }
 
- // Flatten and roll the RRF score back onto the hit so the UI can
- // show something meaningful ("score 0.03" is meaningless, but the
- // ordering it produces is the real signal). Same pass attaches the
- // per-leg breakdown to each hit's `debug` field.
+    // Flatten and roll the RRF score back onto the hit so the UI can
+    // show something meaningful ("score 0.03" is meaningless, but the
+    // ordering it produces is the real signal). Same pass attaches the
+    // per-leg breakdown to each hit's `debug` field.
     let mut chunk_hits: Vec<SearchHit> = acc
         .into_values()
         .map(|a| {
@@ -256,10 +245,10 @@ fn rrf_blend(
         })
         .collect();
 
- // Sort all chunk hits by score and truncate to the caller's limit.
- // No per-file dedup: the frontend groups by file and ranks every
- // method-level chunk so a class with three high-scoring methods
- // surfaces three rows under one file group, not one.
+    // Sort all chunk hits by score and truncate to the caller's limit.
+    // No per-file dedup: the frontend groups by file and ranks every
+    // method-level chunk so a class with three high-scoring methods
+    // surfaces three rows under one file group, not one.
     chunk_hits.sort_by(|a, b| {
         b.score
             .partial_cmp(&a.score)
@@ -313,7 +302,10 @@ mod tests {
     #[test]
     fn nl_shaped_queries_favor_vectors() {
         assert_eq!(pick_weights("send a chat message", true), (1.0, 2.0));
-        assert_eq!(pick_weights("how do players join a world", true), (1.0, 2.0));
+        assert_eq!(
+            pick_weights("how do players join a world", true),
+            (1.0, 2.0)
+        );
     }
 
     #[test]
@@ -323,10 +315,10 @@ mod tests {
 
     #[test]
     fn rrf_promotes_rows_seen_in_both_rankers() {
- // Row A: rank 5 in BM25, rank 1 in vector.
- // Row B: rank 1 in BM25 only.
- // With equal weights, A should outscore B because it benefits
- // from both rankers.
+        // Row A: rank 5 in BM25, rank 1 in vector.
+        // Row B: rank 1 in BM25 only.
+        // With equal weights, A should outscore B because it benefits
+        // from both rankers.
         let mk_hit = |path: &str, start: u64, score: f32| SearchHit {
             slot: "release".into(),
             source_type: "source".into(),
@@ -360,7 +352,7 @@ mod tests {
             distance: 0.1,
         };
 
- // BM25: B at rank 1, then 4 others, then A at rank 6.
+        // BM25: B at rank 1, then 4 others, then A at rank 6.
         let bm25 = vec![
             mk_hit("B.java", 1, 10.0),
             mk_hit("X1.java", 1, 9.0),
@@ -369,7 +361,7 @@ mod tests {
             mk_hit("X4.java", 1, 6.0),
             mk_hit("A.java", 1, 5.0),
         ];
- // Vectors: A at rank 1.
+        // Vectors: A at rank 1.
         let sem = vec![mk_sem("A.java", 1)];
         let sem_distances = vec![0.1];
 

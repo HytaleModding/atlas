@@ -374,15 +374,15 @@ impl SymbolsDb {
     /// Number of rows across all three tables - useful for sanity checks
     /// and the manifest summary.
     pub fn row_counts(&self) -> Result<RowCounts> {
-        let classes: i64 =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM classes", [], |r| r.get(0))?;
-        let methods: i64 =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM methods", [], |r| r.get(0))?;
-        let fields: i64 =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM fields", [], |r| r.get(0))?;
+        let classes: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM classes", [], |r| r.get(0))?;
+        let methods: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM methods", [], |r| r.get(0))?;
+        let fields: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM fields", [], |r| r.get(0))?;
         Ok(RowCounts {
             classes: classes.max(0) as u64,
             methods: methods.max(0) as u64,
@@ -693,9 +693,7 @@ fn insert_field(tx: &rusqlite::Transaction<'_>, f: &FieldSymbol) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::indexer::chunker::{
-        ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind,
-    };
+    use crate::indexer::chunker::{ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind};
     use tempfile::tempdir;
 
     fn sample_symbols() -> FileSymbols {
@@ -807,7 +805,8 @@ mod tests {
             .map(|r| r.unwrap())
             .collect();
         assert!(
-            rows.iter().any(|(c, n)| c == "com.example.Foo" && n == "doThing"),
+            rows.iter()
+                .any(|(c, n)| c == "com.example.Foo" && n == "doThing"),
             "expected doThing hit, got {rows:?}"
         );
     }

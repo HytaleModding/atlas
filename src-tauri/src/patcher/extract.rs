@@ -26,11 +26,7 @@ const NATIVE_PREFIXES: &[&str] = &["darwin", "linux", "freebsd", "win"];
 
 /// Extract all class files (and sibling resources) into `dest`. Returns the
 /// number of entries actually written.
-pub fn extract_server_jar(
-    jar: &Path,
-    dest: &Path,
-    progress: &impl ProgressSink,
-) -> Result<usize> {
+pub fn extract_server_jar(jar: &Path, dest: &Path, progress: &impl ProgressSink) -> Result<usize> {
     let file = File::open(jar).with_context(|| format!("opening {}", jar.display()))?;
     let mut archive =
         ZipArchive::new(file).with_context(|| format!("parsing {} as zip", jar.display()))?;
@@ -66,8 +62,8 @@ pub fn extract_server_jar(
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
 
-        let mut out = File::create(&out_path)
-            .with_context(|| format!("creating {}", out_path.display()))?;
+        let mut out =
+            File::create(&out_path).with_context(|| format!("creating {}", out_path.display()))?;
         io::copy(&mut entry, &mut out)
             .with_context(|| format!("writing {}", out_path.display()))?;
         out.flush()?;

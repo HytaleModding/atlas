@@ -25,12 +25,12 @@ use tree_sitter::{Node, Parser};
 pub enum ChunkKind {
     Type,
     Method,
- /// Constructor - syntactically similar to a method but worth
- /// distinguishing in the UI: a search for `PageManager` that hits
- /// `public PageManager(...)` should surface as "constructor …",
- /// not "method …", so the user understands what actually matched.
+    /// Constructor - syntactically similar to a method but worth
+    /// distinguishing in the UI: a search for `PageManager` that hits
+    /// `public PageManager(...)` should surface as "constructor …",
+    /// not "method …", so the user understands what actually matched.
     Constructor,
- /// Fallback used when tree-sitter fails to parse the file.
+    /// Fallback used when tree-sitter fails to parse the file.
     File,
 }
 
@@ -49,16 +49,16 @@ impl ChunkKind {
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub kind: ChunkKind,
- /// Simple symbol name. For types this is the class name; for methods,
- /// the method name (constructor names == class name).
+    /// Simple symbol name. For types this is the class name; for methods,
+    /// the method name (constructor names == class name).
     pub symbol_name: String,
- /// Dotted FQN of the enclosing class. For Type chunks this is the
- /// class's own FQN; for Method chunks it's the enclosing class's FQN.
+    /// Dotted FQN of the enclosing class. For Type chunks this is the
+    /// class's own FQN; for Method chunks it's the enclosing class's FQN.
     pub class_fqn: String,
- /// 1-based inclusive line range in the source file.
+    /// 1-based inclusive line range in the source file.
     pub start_line: u64,
     pub end_line: u64,
- /// Tokenized payload for Tantivy + (later) embedding model input.
+    /// Tokenized payload for Tantivy + (later) embedding model input.
     pub text: String,
 }
 
@@ -98,16 +98,16 @@ pub struct ClassSymbol {
     pub fqn: String,
     pub simple_name: String,
     pub kind: TypeKind,
- /// Access + non-access modifiers in source order: `public`, `abstract`,
- /// `static`, `final`, `sealed`, etc. Raw tokens - don't normalize
- /// because the SQLite side just round-trips them.
+    /// Access + non-access modifiers in source order: `public`, `abstract`,
+    /// `static`, `final`, `sealed`, etc. Raw tokens - don't normalize
+    /// because the SQLite side just round-trips them.
     pub modifiers: Vec<String>,
- /// FQN of the direct superclass, if one is declared explicitly.
- /// For interfaces this is always None; for classes with no `extends`
- /// clause this is None too (implicit `java.lang.Object`).
+    /// FQN of the direct superclass, if one is declared explicitly.
+    /// For interfaces this is always None; for classes with no `extends`
+    /// clause this is None too (implicit `java.lang.Object`).
     pub superclass: Option<String>,
- /// Implemented interfaces (for classes) / extended interfaces (for
- /// interfaces). Not resolved against imports - raw source text.
+    /// Implemented interfaces (for classes) / extended interfaces (for
+    /// interfaces). Not resolved against imports - raw source text.
     pub interfaces: Vec<String>,
     pub start_line: u64,
     pub end_line: u64,
@@ -117,19 +117,19 @@ pub struct ClassSymbol {
 #[derive(Debug, Clone)]
 pub struct MethodSymbol {
     pub class_fqn: String,
- /// Method name. For constructors, equal to the enclosing class's
- /// simple name (`PageManager`).
+    /// Method name. For constructors, equal to the enclosing class's
+    /// simple name (`PageManager`).
     pub name: String,
     pub is_constructor: bool,
     pub modifiers: Vec<String>,
- /// Return type as it appears in source. `None` for constructors.
- /// Generics preserved verbatim (`List<Map<String, Integer>>`).
+    /// Return type as it appears in source. `None` for constructors.
+    /// Generics preserved verbatim (`List<Map<String, Integer>>`).
     pub return_type: Option<String>,
- /// Parameter types in declaration order, as raw source text. Includes
- /// generics. Does not include parameter names - unused in diff-tracker
- /// lookups.
+    /// Parameter types in declaration order, as raw source text. Includes
+    /// generics. Does not include parameter names - unused in diff-tracker
+    /// lookups.
     pub param_types: Vec<String>,
- /// `throws` clause FQNs (unresolved, as written).
+    /// `throws` clause FQNs (unresolved, as written).
     pub thrown: Vec<String>,
     pub start_line: u64,
     pub end_line: u64,
@@ -140,9 +140,9 @@ pub struct MethodSymbol {
 pub struct FieldSymbol {
     pub class_fqn: String,
     pub name: String,
- /// Declared type as source text. For enum constants this is the
- /// enclosing enum's simple name - callers who care about enum-vs-field
- /// can cross-reference `ClassSymbol.kind`.
+    /// Declared type as source text. For enum constants this is the
+    /// enclosing enum's simple name - callers who care about enum-vs-field
+    /// can cross-reference `ClassSymbol.kind`.
     pub type_text: String,
     pub modifiers: Vec<String>,
     pub start_line: u64,
@@ -166,12 +166,12 @@ pub struct FileSymbols {
 pub struct ChunkerOutput {
     pub chunks: Vec<Chunk>,
     pub symbols: FileSymbols,
- /// The dotted package taken from the source file's `package` declaration
- /// - authoritative when present, since decompiled trees can strip leading
- /// directory segments (Vineflower's hytale output drops `com/hypixel/`)
- /// while the in-file declaration stays intact. `None` when the file has
- /// no `package` line (default package, parse failure, or `package-info.java`
- /// without one).
+    /// The dotted package taken from the source file's `package` declaration
+    /// - authoritative when present, since decompiled trees can strip leading
+    /// directory segments (Vineflower's hytale output drops `com/hypixel/`)
+    /// while the in-file declaration stays intact. `None` when the file has
+    /// no `package` line (default package, parse failure, or `package-info.java`
+    /// without one).
     pub parsed_package: Option<String>,
 }
 
@@ -243,8 +243,8 @@ fn extract_package_declaration(root: Node, bytes: &[u8]) -> Option<String> {
     let mut cursor = root.walk();
     for child in root.named_children(&mut cursor) {
         if child.kind() == "package_declaration" {
- // The dotted name is the first scoped_identifier or identifier
- // child. Annotations on the package decl precede it.
+            // The dotted name is the first scoped_identifier or identifier
+            // child. Annotations on the package decl precede it.
             let mut inner = child.walk();
             for n in child.named_children(&mut inner) {
                 match n.kind() {
@@ -275,13 +275,7 @@ fn whole_file_chunk(source: &str, package: &str) -> Chunk {
     }
 }
 
-fn walk(
-    node: Node,
-    bytes: &[u8],
-    package: &str,
-    class_stack: &[String],
-    out: &mut ChunkerOutput,
-) {
+fn walk(node: Node, bytes: &[u8], package: &str, class_stack: &[String], out: &mut ChunkerOutput) {
     match node.kind() {
         "class_declaration"
         | "interface_declaration"
@@ -316,17 +310,17 @@ fn visit_type(
     let class_fqn = build_fqn(package, &new_stack);
     let class_javadoc = preceding_javadoc(node, bytes);
 
- // Header = modifiers + `class Foo extends ... implements ...` up to body.
+    // Header = modifiers + `class Foo extends ... implements ...` up to body.
     let signature = type_signature(node, bytes);
 
- // Symbol metadata for the sidecar. Populated in parallel with the
- // Type chunk's TOC text below.
+    // Symbol metadata for the sidecar. Populated in parallel with the
+    // Type chunk's TOC text below.
     let type_kind = type_kind_from_node(node);
     let modifiers = extract_modifiers(node, bytes);
     let superclass = extract_superclass(node, bytes);
     let interfaces = extract_interfaces(node, bytes);
 
- // --- build the Type chunk text as walk the body -----------------
+    // --- build the Type chunk text as walk the body -----------------
     let mut type_text = String::new();
     if let Some(jd) = &class_javadoc {
         type_text.push_str(jd);
@@ -350,8 +344,8 @@ fn visit_type(
                         .child_by_field_name("name")
                         .and_then(|n| node_text(n, bytes))
                         .unwrap_or_else(|| {
- // Constructors don't have a "name" field in
- // tree-sitter-java - they have a `type` field.
+                            // Constructors don't have a "name" field in
+                            // tree-sitter-java - they have a `type` field.
                             child
                                 .child_by_field_name("type")
                                 .and_then(|n| node_text(n, bytes))
@@ -360,12 +354,12 @@ fn visit_type(
 
                     let method_sig = method_signature(child, bytes);
 
- // Append to type-chunk TOC.
+                    // Append to type-chunk TOC.
                     type_text.push_str("  ");
                     type_text.push_str(method_sig.trim());
                     type_text.push_str(";\n");
 
- // Emit the method / constructor chunk.
+                    // Emit the method / constructor chunk.
                     let body_text = slice_text(child, bytes);
                     let mut method_text = String::new();
                     method_text.push_str(&class_fqn);
@@ -390,7 +384,7 @@ fn visit_type(
                         text: method_text,
                     });
 
- // And emit the symbol record.
+                    // And emit the symbol record.
                     out.symbols.methods.push(MethodSymbol {
                         class_fqn: class_fqn.clone(),
                         name: method_name,
@@ -419,8 +413,8 @@ fn visit_type(
                         .and_then(|n| node_text(n, bytes))
                         .unwrap_or_default();
                     let mods = extract_modifiers(child, bytes);
- // A single declaration may define multiple fields
- // (`int a, b, c;`) - emit one record per declarator.
+                    // A single declaration may define multiple fields
+                    // (`int a, b, c;`) - emit one record per declarator.
                     let mut cursor2 = child.walk();
                     for decl in child.named_children(&mut cursor2) {
                         if decl.kind() == "variable_declarator" {
@@ -455,8 +449,8 @@ fn visit_type(
                         out.symbols.fields.push(FieldSymbol {
                             class_fqn: class_fqn.clone(),
                             name: const_name,
- // For enum constants the "type" is the
- // enclosing enum's simple name.
+                            // For enum constants the "type" is the
+                            // enclosing enum's simple name.
                             type_text: name.clone(),
                             modifiers: vec![
                                 "public".to_string(),
@@ -473,8 +467,8 @@ fn visit_type(
                 | "enum_declaration"
                 | "record_declaration"
                 | "annotation_type_declaration" => {
- // Nested type - record its symbol in the outer TOC and
- // recurse so it gets its own Type + Method chunks.
+                    // Nested type - record its symbol in the outer TOC and
+                    // recurse so it gets its own Type + Method chunks.
                     let nested_name = child
                         .child_by_field_name("name")
                         .and_then(|n| node_text(n, bytes))
@@ -541,8 +535,8 @@ fn type_kind_from_node(node: Node) -> TypeKind {
 /// needed, a separate field on the symbol is the right shape.
 fn extract_modifiers(node: Node, bytes: &[u8]) -> Vec<String> {
     let Some(mods) = node.child_by_field_name("modifiers") else {
- // tree-sitter-java doesn't always expose `modifiers` as a named
- // field; fall back to scanning named children.
+        // tree-sitter-java doesn't always expose `modifiers` as a named
+        // field; fall back to scanning named children.
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             if child.kind() == "modifiers" {
@@ -558,18 +552,16 @@ fn collect_modifier_tokens(mods: Node, bytes: &[u8]) -> Vec<String> {
     let mut cursor = mods.walk();
     let mut out = Vec::new();
     for child in mods.children(&mut cursor) {
- // Annotations live here too (`marker_annotation`, `annotation`);
- // skip them - only want keyword modifiers.
+        // Annotations live here too (`marker_annotation`, `annotation`);
+        // skip them - only want keyword modifiers.
         if child.is_named() && child.kind().ends_with("annotation") {
             continue;
         }
         if let Some(text) = node_text(child, bytes) {
             let trimmed = text.trim();
- // Keep only simple keyword tokens. Anything with whitespace or
- // punctuation isn't a modifier.
-            if !trimmed.is_empty()
-                && trimmed.chars().all(|c| c.is_ascii_alphabetic())
-            {
+            // Keep only simple keyword tokens. Anything with whitespace or
+            // punctuation isn't a modifier.
+            if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_alphabetic()) {
                 out.push(trimmed.to_string());
             }
         }
@@ -584,10 +576,10 @@ fn extract_superclass(node: Node, bytes: &[u8]) -> Option<String> {
     if node.kind() != "class_declaration" {
         return None;
     }
- // tree-sitter-java exposes `superclass` as a field on class_declaration.
- // It wraps the `extends` keyword + the type; want just the type text.
+    // tree-sitter-java exposes `superclass` as a field on class_declaration.
+    // It wraps the `extends` keyword + the type; want just the type text.
     let superclass = node.child_by_field_name("superclass")?;
- // The superclass node contains `extends` and a type child.
+    // The superclass node contains `extends` and a type child.
     let mut cursor = superclass.walk();
     for child in superclass.named_children(&mut cursor) {
         if let Some(text) = node_text(child, bytes) {
@@ -652,11 +644,11 @@ fn extract_param_types(node: Node, bytes: &[u8]) -> Vec<String> {
                 }
             }
             "spread_parameter" => {
- // Unlike `formal_parameter`, tree-sitter-java does NOT
- // expose `type` as a field on `spread_parameter`. The type
- // appears as the first named child (type_identifier,
- // generic_type, array_type, etc.); `variable_declarator`
- // holds the parameter name and comes last.
+                // Unlike `formal_parameter`, tree-sitter-java does NOT
+                // expose `type` as a field on `spread_parameter`. The type
+                // appears as the first named child (type_identifier,
+                // generic_type, array_type, etc.); `variable_declarator`
+                // holds the parameter name and comes last.
                 let mut c2 = p.walk();
                 for t in p.named_children(&mut c2) {
                     if t.kind() == "variable_declarator" {
@@ -669,8 +661,8 @@ fn extract_param_types(node: Node, bytes: &[u8]) -> Vec<String> {
                 }
             }
             "receiver_parameter" => {
- // `this`-receiver pseudo-parameter. Not part of the JVM
- // signature; skip.
+                // `this`-receiver pseudo-parameter. Not part of the JVM
+                // signature; skip.
             }
             _ => {}
         }
@@ -681,8 +673,8 @@ fn extract_param_types(node: Node, bytes: &[u8]) -> Vec<String> {
 /// Extract the `throws` clause FQNs (as written) from a method or
 /// constructor node. Empty when no clause.
 fn extract_thrown(node: Node, bytes: &[u8]) -> Vec<String> {
- // tree-sitter-java represents throws as a sibling `throws` node
- // inside the declaration, not as a field. Walk children.
+    // tree-sitter-java represents throws as a sibling `throws` node
+    // inside the declaration, not as a field. Walk children.
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         if child.kind() == "throws" {
@@ -734,7 +726,7 @@ fn type_signature(node: Node, bytes: &[u8]) -> String {
 }
 
 fn method_signature(node: Node, bytes: &[u8]) -> String {
- // Abstract methods have no body; fall back to the whole decl.
+    // Abstract methods have no body; fall back to the whole decl.
     let end = node
         .child_by_field_name("body")
         .map(|b| b.start_byte())
@@ -773,9 +765,9 @@ mod tests {
 
     #[test]
     fn parsed_package_overrides_path_fallback() {
- // Decompiler output that strips part of the directory tree but
- // keeps the in-file declaration. Worker passes the path-derived
- // package as fallback; chunker should prefer the declared one.
+        // Decompiler output that strips part of the directory tree but
+        // keeps the in-file declaration. Worker passes the path-derived
+        // package as fallback; chunker should prefer the declared one.
         let src = r#"
 package com.hypixel.hytale.event;
 
@@ -798,8 +790,8 @@ public class EventBus {
 
     #[test]
     fn missing_package_falls_back_to_argument() {
- // Default-package source: chunker has nothing to parse, so the
- // path-derived fallback wins.
+        // Default-package source: chunker has nothing to parse, so the
+        // path-derived fallback wins.
         let src = "public class A { public void x() {} }\n";
         let out = chunk_and_extract(src, "fallback");
         assert_eq!(out.parsed_package, None);
@@ -835,10 +827,10 @@ public class Foo {
 
         let bar = find(&chunks, ChunkKind::Method, "bar");
         assert_eq!(bar.class_fqn, "com.example.Foo");
- // Method text is prefixed with the enclosing class FQN so the
- // embedding model can disambiguate same-named methods.
+        // Method text is prefixed with the enclosing class FQN so the
+        // embedding model can disambiguate same-named methods.
         assert!(bar.text.starts_with("com.example.Foo"));
- // And contains the method body verbatim.
+        // And contains the method body verbatim.
         assert!(bar.text.contains("return 1"));
     }
 
@@ -852,10 +844,10 @@ public class Foo {
 "#;
         let chunks = chunk_file(src, "com.example");
         let foo = find(&chunks, ChunkKind::Type, "Foo");
- // Signature line is in the TOC.
+        // Signature line is in the TOC.
         assert!(foo.text.contains("public int bar()"));
- // Body is NOT - the Type chunk is an index/overview, bodies live
- // in their own Method chunks so similarity search hits the right one.
+        // Body is NOT - the Type chunk is an index/overview, bodies live
+        // in their own Method chunks so similarity search hits the right one.
         assert!(!foo.text.contains("return 42"));
     }
 
@@ -870,8 +862,8 @@ public class PageManager {
 }
 "#;
         let chunks = chunk_file(src, "com.example");
- // Both should be emitted, tagged differently, with matching
- // symbol names (constructor name == class name in Java).
+        // Both should be emitted, tagged differently, with matching
+        // symbol names (constructor name == class name in Java).
         let ctor = find(&chunks, ChunkKind::Constructor, "PageManager");
         assert_eq!(ctor.class_fqn, "com.example.PageManager");
         assert!(ctor.text.contains("this.size = initialSize"));
@@ -879,7 +871,7 @@ public class PageManager {
         let method = find(&chunks, ChunkKind::Method, "getSize");
         assert_eq!(method.class_fqn, "com.example.PageManager");
 
- // And no constructor chunk accidentally gets ChunkKind::Method.
+        // And no constructor chunk accidentally gets ChunkKind::Method.
         assert!(
             !chunks
                 .iter()
@@ -922,7 +914,7 @@ public class Widget {
 
     #[test]
     fn empty_or_non_type_file_falls_back_to_file_chunk() {
- // package-info.java style - no top-level types.
+        // package-info.java style - no top-level types.
         let src = "package com.example;\n";
         let chunks = chunk_file(src, "com.example");
         assert_eq!(chunks.len(), 1);
@@ -930,9 +922,9 @@ public class Widget {
         assert_eq!(chunks[0].class_fqn, "com.example");
     }
 
- // -------------------------------------------------------------------
- // Symbol extraction tests
- // -------------------------------------------------------------------
+    // -------------------------------------------------------------------
+    // Symbol extraction tests
+    // -------------------------------------------------------------------
 
     fn find_class<'a>(out: &'a ChunkerOutput, fqn: &str) -> &'a ClassSymbol {
         out.symbols
@@ -951,18 +943,12 @@ public class Widget {
             })
     }
 
-    fn find_method<'a>(
-        out: &'a ChunkerOutput,
-        class_fqn: &str,
-        name: &str,
-    ) -> &'a MethodSymbol {
+    fn find_method<'a>(out: &'a ChunkerOutput, class_fqn: &str, name: &str) -> &'a MethodSymbol {
         out.symbols
             .methods
             .iter()
             .find(|m| m.class_fqn == class_fqn && m.name == name)
-            .unwrap_or_else(|| {
-                panic!("no MethodSymbol {class_fqn}::{name}")
-            })
+            .unwrap_or_else(|| panic!("no MethodSymbol {class_fqn}::{name}"))
     }
 
     #[test]
@@ -1006,7 +992,7 @@ public interface Renderable extends Visible {}
         let r = find_class(&out, "com.example.Renderable");
         assert_eq!(r.kind, TypeKind::Interface);
         assert!(r.superclass.is_none());
- // For interfaces surface extends-list via `interfaces`.
+        // For interfaces surface extends-list via `interfaces`.
         assert_eq!(r.interfaces, vec!["Visible".to_string()]);
     }
 
@@ -1018,7 +1004,7 @@ public enum Color { RED, GREEN, BLUE }
 "#;
         let out = chunk_and_extract(enum_src, "com.example");
         assert_eq!(find_class(&out, "com.example.Color").kind, TypeKind::Enum);
- // Enum constants are surfaced as fields.
+        // Enum constants are surfaced as fields.
         let names: Vec<&str> = out.symbols.fields.iter().map(|f| f.name.as_str()).collect();
         assert!(names.contains(&"RED"));
         assert!(names.contains(&"GREEN"));
@@ -1029,10 +1015,7 @@ package com.example;
 public record Point(int x, int y) {}
 "#;
         let out = chunk_and_extract(rec_src, "com.example");
-        assert_eq!(
-            find_class(&out, "com.example.Point").kind,
-            TypeKind::Record
-        );
+        assert_eq!(find_class(&out, "com.example.Point").kind, TypeKind::Record);
     }
 
     #[test]
@@ -1101,7 +1084,7 @@ public class Box {
         assert_eq!(t.type_text, "String");
         assert!(t.modifiers.iter().any(|m| m == "static"));
 
- // Multi-declarator: `int a, b, c;` emits three records.
+        // Multi-declarator: `int a, b, c;` emits three records.
         assert!(by_name.contains_key("a"));
         assert!(by_name.contains_key("b"));
         assert!(by_name.contains_key("c"));
@@ -1162,29 +1145,29 @@ public class Api {
 "#;
         let out = chunk_and_extract(src, "com.example");
         let m = find_method(&out, "com.example.Api", "toString");
- // Annotations must not leak into the modifier list.
+        // Annotations must not leak into the modifier list.
         assert!(m.modifiers.iter().all(|mo| !mo.starts_with('@')));
         assert!(m.modifiers.iter().any(|mo| mo == "public"));
     }
 
     #[test]
     fn parse_failure_still_returns_chunker_output_with_empty_symbols() {
- // package-info style: no types at all.
+        // package-info style: no types at all.
         let out = chunk_and_extract("package com.example;\n", "com.example");
         assert_eq!(out.symbols.classes.len(), 0);
         assert_eq!(out.symbols.methods.len(), 0);
         assert_eq!(out.symbols.fields.len(), 0);
- // And a File chunk still gets emitted so the search index isn't
- // missing this file.
+        // And a File chunk still gets emitted so the search index isn't
+        // missing this file.
         assert_eq!(out.chunks.len(), 1);
         assert_eq!(out.chunks[0].kind, ChunkKind::File);
     }
 
- /// Opt-in probe: walk a real decompile tree and report chunker stats.
- /// Run with:
- /// ATLAS_PROBE_DECOMPILE=<path> cargo test --lib \
- /// indexer::chunker::tests::probe_real_decompile \
- /// -- --ignored --nocapture
+    /// Opt-in probe: walk a real decompile tree and report chunker stats.
+    /// Run with:
+    /// ATLAS_PROBE_DECOMPILE=<path> cargo test --lib \
+    /// indexer::chunker::tests::probe_real_decompile \
+    /// -- --ignored --nocapture
     #[test]
     #[ignore = "reads a large on-disk decompile; opt-in via ATLAS_PROBE_DECOMPILE"]
     fn probe_real_decompile() {
@@ -1221,7 +1204,7 @@ public class Api {
             };
             files += 1;
 
- // Derive package the same way walker.rs does.
+            // Derive package the same way walker.rs does.
             let rel = path.strip_prefix(&root).unwrap_or(path);
             let package = rel
                 .parent()
@@ -1261,17 +1244,16 @@ public class Api {
         );
         eprintln!(
             "avg chunks / file : {:.2}",
-            (types + methods + constructors + file_fallbacks) as f64
-                / (files.max(1) as f64)
+            (types + methods + constructors + file_fallbacks) as f64 / (files.max(1) as f64)
         );
         eprintln!(
             "max chunks in one : {} ({})",
             max_chunks_in_file.0, max_chunks_in_file.1
         );
 
- // Hard floor: decompiled server source should overwhelmingly parse.
- // If the fallback ratio blows past 5% something is wrong with the
- // chunker or tree-sitter-java, not the input.
+        // Hard floor: decompiled server source should overwhelmingly parse.
+        // If the fallback ratio blows past 5% something is wrong with the
+        // chunker or tree-sitter-java, not the input.
         let fallback_ratio = (file_fallbacks as f64) / (files.max(1) as f64);
         assert!(
             fallback_ratio < 0.05,

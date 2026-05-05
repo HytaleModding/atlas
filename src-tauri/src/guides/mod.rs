@@ -6,7 +6,6 @@
 //! (often hours or days); the source section updates on a Hytale-build
 //! cadence (months). Mixing them into one rebuild was the wrong shape.
 //!
-//! What this module does:
 //!   * Walks `<atlas-cache>/hm-docs/site/` for `.md` / `.mdx` files via
 //!     the existing [`crate::indexer::hm_docs::walk_docs`].
 //!   * Indexes each file as one Tantivy doc (title + body, BM25 only -
@@ -132,14 +131,22 @@ impl GuidesIndex {
         let fingerprint = compute_fingerprint(&self.inner.repo_dir, &docs);
 
         let stored = read_manifest(&self.manifest_path()).ok();
-        let already_open = self.inner.opened.read().unwrap().is_some();
+        let already_open = self
+            .inner
+            .opened
+            .read()
+            .expect("guides index lock poisoned")
+            .is_some();
         if let Some(prev) = stored {
             if prev.schema_version == SCHEMA_VERSION
                 && prev.file_count == fingerprint.file_count
                 && prev.max_mtime_secs == fingerprint.max_mtime_secs
                 && already_open
             {
-                tracing::debug!(file_count = fingerprint.file_count, "guides index up to date");
+                tracing::debug!(
+                    file_count = fingerprint.file_count,
+                    "guides index up to date"
+                );
                 return Ok(());
             }
             // Stored manifest matches but no opened reader yet (cold start) -
@@ -149,7 +156,11 @@ impl GuidesIndex {
                 && prev.max_mtime_secs == fingerprint.max_mtime_secs
             {
                 let opened = open_existing(&self.index_dir())?;
-                *self.inner.opened.write().unwrap() = Some(opened);
+                *self
+                    .inner
+                    .opened
+                    .write()
+                    .expect("guides index lock poisoned") = Some(opened);
                 return Ok(());
             }
         }
@@ -176,7 +187,11 @@ impl GuidesIndex {
         if final_dir.exists() {
             // Drop the old reader before deleting its files (Windows
             // refuses to remove a directory whose mmap is still mapped).
-            *self.inner.opened.write().unwrap() = None;
+            *self
+                .inner
+                .opened
+                .write()
+                .expect("guides index lock poisoned") = None;
             std::fs::remove_dir_all(&final_dir)
                 .with_context(|| format!("removing old guides index {}", final_dir.display()))?;
         }
@@ -184,7 +199,11 @@ impl GuidesIndex {
             .with_context(|| format!("rename {} -> {}", tmp_dir.display(), final_dir.display()))?;
 
         let opened = open_existing(&final_dir)?;
-        *self.inner.opened.write().unwrap() = Some(opened);
+        *self
+            .inner
+            .opened
+            .write()
+            .expect("guides index lock poisoned") = Some(opened);
 
         write_manifest(
             &self.manifest_path(),
@@ -205,7 +224,11 @@ impl GuidesIndex {
 
     /// True when there's a populated index ready to serve queries.
     pub fn is_ready(&self) -> bool {
-        self.inner.opened.read().unwrap().is_some()
+        self.inner
+            .opened
+            .read()
+            .expect("guides index lock poisoned")
+            .is_some()
     }
 
     /// Search the guides index. `slot_label` is stamped onto every
@@ -220,15 +243,17 @@ impl GuidesIndex {
         if trimmed.is_empty() {
             return Ok(Vec::new());
         }
-        let guard = self.inner.opened.read().unwrap();
+        let guard = self
+            .inner
+            .opened
+            .read()
+            .expect("guides index lock poisoned");
         let Some(opened) = guard.as_ref() else {
             return Ok(Vec::new());
         };
 
-        let mut parser = QueryParser::for_index(
-            &opened.index,
-            vec![opened.fields.title, opened.fields.body],
-        );
+        let mut parser =
+            QueryParser::for_index(&opened.index, vec![opened.fields.title, opened.fields.body]);
         parser.set_field_boost(opened.fields.title, 3.0);
 
         let parsed = match parser.parse_query(trimmed) {
@@ -454,7 +479,11 @@ mod tests {
     fn indexes_and_searches_markdown_files() {
         let data = tempdir().unwrap();
         let repo = tempdir().unwrap();
-        write_doc(repo.path(), "intro.md", "# Welcome\n\nGetting started with mods.");
+        write_doc(
+            repo.path(),
+            "intro.md",
+            "# Welcome\n\nGetting started with mods.",
+        );
         write_doc(
             repo.path(),
             "content/docs/en/camera.mdx",

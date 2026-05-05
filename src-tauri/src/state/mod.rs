@@ -105,8 +105,8 @@ impl StateDb {
         std::fs::create_dir_all(data_dir)
             .with_context(|| format!("creating data dir {}", data_dir.display()))?;
         let path = data_dir.join("state.sqlite");
-        let conn = Connection::open(&path)
-            .with_context(|| format!("opening {}", path.display()))?;
+        let conn =
+            Connection::open(&path).with_context(|| format!("opening {}", path.display()))?;
         conn.execute_batch(
             "PRAGMA journal_mode=WAL;
              PRAGMA foreign_keys=ON;

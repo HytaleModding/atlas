@@ -22,9 +22,7 @@ use anyhow::Result;
 
 use crate::indexer::symbols::SymbolsDb;
 
-use super::{
-    ApiKind, ApiRef, DiffEntry, DiffSeverity, MethodCandidate, Resolution,
-};
+use super::{ApiKind, ApiRef, DiffEntry, DiffSeverity, MethodCandidate, Resolution};
 
 /// Maximum edit distance for a name to count as "probably a rename".
 /// Three is generous enough to catch `getName` → `getFullName` (4 - rejects)
@@ -89,11 +87,7 @@ pub fn compare_pair(
 
 /// Both baseline and target produced a Resolution other than NotFound.
 /// Decide between SignatureChanged / Deprecated / Unchanged.
-fn classify_present(
-    api_ref: ApiRef,
-    baseline: Resolution,
-    target: Resolution,
-) -> DiffEntry {
+fn classify_present(api_ref: ApiRef, baseline: Resolution, target: Resolution) -> DiffEntry {
     match api_ref.kind {
         ApiKind::Class => classify_class(api_ref, baseline, target),
         ApiKind::Method => classify_method(api_ref, baseline, target),
@@ -101,11 +95,7 @@ fn classify_present(
     }
 }
 
-fn classify_class(
-    api_ref: ApiRef,
-    baseline: Resolution,
-    target: Resolution,
-) -> DiffEntry {
+fn classify_class(api_ref: ApiRef, baseline: Resolution, target: Resolution) -> DiffEntry {
     let base_mods = modifiers_of(&baseline);
     let target_mods = modifiers_of(&target);
     if newly_deprecated(base_mods, target_mods) {
@@ -120,11 +110,7 @@ fn classify_class(
     unchanged(api_ref, baseline, target)
 }
 
-fn classify_method(
-    api_ref: ApiRef,
-    baseline: Resolution,
-    target: Resolution,
-) -> DiffEntry {
+fn classify_method(api_ref: ApiRef, baseline: Resolution, target: Resolution) -> DiffEntry {
     let base_overloads = method_overloads(&baseline);
     let target_overloads = method_overloads(&target);
 
@@ -161,11 +147,7 @@ fn classify_method(
     unchanged(api_ref, baseline, target)
 }
 
-fn classify_field(
-    api_ref: ApiRef,
-    baseline: Resolution,
-    target: Resolution,
-) -> DiffEntry {
+fn classify_field(api_ref: ApiRef, baseline: Resolution, target: Resolution) -> DiffEntry {
     let base_sig = signature_of(&baseline);
     let target_sig = signature_of(&target);
     if base_sig != target_sig {
@@ -357,9 +339,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
         curr[0] = i + 1;
         for (j, cb) in b.iter().enumerate() {
             let cost = if ca == cb { 0 } else { 1 };
-            curr[j + 1] = (curr[j] + 1)
-                .min(prev[j + 1] + 1)
-                .min(prev[j] + cost);
+            curr[j + 1] = (curr[j] + 1).min(prev[j + 1] + 1).min(prev[j] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -369,9 +349,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::indexer::chunker::{
-        ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind,
-    };
+    use crate::indexer::chunker::{ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind};
     use tempfile::tempdir;
 
     fn ref_method(name: &str) -> ApiRef {
@@ -384,7 +362,10 @@ mod tests {
         }
     }
 
-    fn build_db(methods: Vec<MethodSymbol>, fields: Vec<FieldSymbol>) -> (tempfile::TempDir, std::path::PathBuf) {
+    fn build_db(
+        methods: Vec<MethodSymbol>,
+        fields: Vec<FieldSymbol>,
+    ) -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempdir().unwrap();
         let path = dir.path().join("symbols.sqlite");
         let mut db = SymbolsDb::create(&path).unwrap();

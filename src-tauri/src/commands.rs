@@ -122,14 +122,28 @@ fn spawn_index(
         slot,
     });
     rt.spawn(async move {
- // Desktop indexing never summarizes - that's a central-build
- // responsibility (atlas-build) so users don't pay LLM cost.
- // HM docs (`hm_doc`) live in their own decoupled `guides` index
- // (see `crate::guides`); the desktop pipeline only handles
- // decompiled source.
-        match indexer::run(embedder, slot, decompile_dir, index_dir, lance_dir, sink, None, None, None, None, None).await {
+        // Desktop indexing never summarizes - that's a central-build
+        // responsibility (atlas-build) so users don't pay LLM cost.
+        // HM docs (`hm_doc`) live in their own decoupled `guides` index
+        // (see `crate::guides`); the desktop pipeline only handles
+        // decompiled source.
+        match indexer::run(
+            embedder,
+            slot,
+            decompile_dir,
+            index_dir,
+            lance_dir,
+            sink,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        {
             Ok(()) => {
- // Force the next search to reopen the fresh index.
+                // Force the next search to reopen the fresh index.
                 catalog.invalidate(slot);
             }
             Err(err) => {
@@ -243,15 +257,15 @@ pub fn start_decompile(
 
     let data_dir = data_dir()?;
 
- // Copy the JAR into Atlas's own data dir so to decompile from a stable
- // snapshot rather than the live install. Two reasons:
- // 1. Hytale updates rewrite the JAR underneath us; the snapshot lets
- // decompile output reflect a known build until the user explicitly
- // re-decompiles.
- // 2. The decompiler reads the JAR repeatedly; pointing at the user's
- // install means a game update mid-decompile would corrupt output.
- // Re-running this command always re-copies, so "Re-decompile" after a
- // game patch is just calling `start_decompile` again.
+    // Copy the JAR into Atlas's own data dir so to decompile from a stable
+    // snapshot rather than the live install. Two reasons:
+    // 1. Hytale updates rewrite the JAR underneath us; the snapshot lets
+    // decompile output reflect a known build until the user explicitly
+    // re-decompiles.
+    // 2. The decompiler reads the JAR repeatedly; pointing at the user's
+    // install means a game update mid-decompile would corrupt output.
+    // Re-running this command always re-copies, so "Re-decompile" after a
+    // game patch is just calling `start_decompile` again.
     let snapshot_install = data_dir.as_path().join("jar-snapshots").join(slot.as_str());
     let snapshot_server_dir = snapshot_install.join("Server");
     std::fs::create_dir_all(&snapshot_server_dir).map_err(|e| {
@@ -286,9 +300,7 @@ pub fn start_decompile(
 }
 
 #[tauri::command]
-pub fn patcher_status(
-    status: State<'_, SharedStatus>,
-) -> patcher::status::PatcherStatus {
+pub fn patcher_status(status: State<'_, SharedStatus>) -> patcher::status::PatcherStatus {
     status.snapshot()
 }
 
@@ -296,10 +308,7 @@ pub fn patcher_status(
 /// Also clears the index for that slot since it now points at files that
 /// no longer exist.
 #[tauri::command]
-pub fn clear_decompile(
-    slot: Slot,
-    catalog: State<'_, Arc<SearchCatalog>>,
-) -> Result<(), String> {
+pub fn clear_decompile(slot: Slot, catalog: State<'_, Arc<SearchCatalog>>) -> Result<(), String> {
     let data_dir = data_dir()?;
     let workspace = patcher::workspace_for(data_dir.as_path(), slot);
     patcher::clear_slot(&workspace).map_err(|e| e.to_string())?;
@@ -342,7 +351,8 @@ pub fn index_overview() -> Result<IndexOverview, String> {
     let release_index = indexer::index_dir_for(data_dir.as_path(), Slot::Release);
     let pre_release_index = indexer::index_dir_for(data_dir.as_path(), Slot::PreRelease);
 
-    let release_decompile = patcher::workspace_for(data_dir.as_path(), Slot::Release).join("decompile");
+    let release_decompile =
+        patcher::workspace_for(data_dir.as_path(), Slot::Release).join("decompile");
     let pre_release_decompile =
         patcher::workspace_for(data_dir.as_path(), Slot::PreRelease).join("decompile");
 
@@ -358,9 +368,7 @@ pub fn index_overview() -> Result<IndexOverview, String> {
 
 /// Current in-flight indexing activity (one at a time, matches patcher model).
 #[tauri::command]
-pub fn index_status(
-    status: State<'_, SharedIndexerStatus>,
-) -> indexer::status::IndexerStatus {
+pub fn index_status(status: State<'_, SharedIndexerStatus>) -> indexer::status::IndexerStatus {
     status.snapshot()
 }
 
@@ -382,18 +390,15 @@ pub fn index_start(
 
     let decompile_dir = patcher::workspace_for(data_dir.as_path(), slot).join("decompile");
     if !decompile_dir.is_dir() {
-        return Err(format!(
-            "{} has no decompile to index",
-            slot.as_str()
-        ));
+        return Err(format!("{} has no decompile to index", slot.as_str()));
     }
 
     let index_dir = indexer::index_dir_for(data_dir.as_path(), slot);
     let lance_dir = lance::lance_dir_for(data_dir.as_path(), slot);
     let model_cache = data_dir.as_path().join("models");
 
- // Lazy-load BGE-small on first index run. Downloads ~80MB of weights
- // the first time; subsequent runs reuse the cached ONNX session.
+    // Lazy-load BGE-small on first index run. Downloads ~80MB of weights
+    // the first time; subsequent runs reuse the cached ONNX session.
     let embedder_instance = embedder
         .get_or_init(model_cache)
         .map_err(|e| format!("loading embedder: {e:#}"))?;
@@ -415,10 +420,7 @@ pub fn index_start(
 /// Remove a slot's index. (Used only by internal cleanup - `clear_decompile`
 /// already wipes the index.)
 #[tauri::command]
-pub fn clear_index(
-    slot: Slot,
-    catalog: State<'_, Arc<SearchCatalog>>,
-) -> Result<(), String> {
+pub fn clear_index(slot: Slot, catalog: State<'_, Arc<SearchCatalog>>) -> Result<(), String> {
     let data_dir = data_dir()?;
     let index_dir = indexer::index_dir_for(data_dir.as_path(), slot);
     indexer::clear_slot(&index_dir).map_err(|e| e.to_string())?;
@@ -449,18 +451,18 @@ pub async fn search(
     slot: Slot,
     query: String,
     limit: Option<usize>,
- // `source_types`: restrict results to one or more sections. `None`
- // (or empty vec) means "all sections". Recognised values match the
- // `source_type` field on every chunk: `source`, `hm_doc`,
- // `hypixel_doc`, `asset`. Unknown values are tolerated (they just
- // match nothing).
+    // `source_types`: restrict results to one or more sections. `None`
+    // (or empty vec) means "all sections". Recognised values match the
+    // `source_type` field on every chunk: `source`, `hm_doc`,
+    // `hypixel_doc`, `asset`. Unknown values are tolerated (they just
+    // match nothing).
     source_types: Option<Vec<String>>,
 ) -> Result<SearchResponse, String> {
     let limit = limit.unwrap_or(25).clamp(1, 100);
- // The section filter pushes into both Tantivy (via BooleanQuery
- // AND-clause on `source_type`) and Lance (via `only_if` predicate),
- // so the result list is already section-narrowed when it returns.
- // No over-fetch / post-filter needed.
+    // The section filter pushes into both Tantivy (via BooleanQuery
+    // AND-clause on `source_type`) and Lance (via `only_if` predicate),
+    // so the result list is already section-narrowed when it returns.
+    // No over-fetch / post-filter needed.
     let section_filter: Option<Vec<String>> = source_types
         .map(|v| v.into_iter().filter(|s| !s.is_empty()).collect())
         .filter(|v: &Vec<String>| !v.is_empty());
@@ -477,12 +479,12 @@ pub async fn search(
     let model_cache = data_dir.as_path().join("models");
     let _decompile_dir = patcher::workspace_for(data_dir.as_path(), slot).join("decompile");
 
- // Clone Arcs out of Tauri state before any await - State<'_, …> isn't
- // Send, so holding it across an await trips the compiler.
+    // Clone Arcs out of Tauri state before any await - State<'_, …> isn't
+    // Send, so holding it across an await trips the compiler.
     let catalog_arc: Arc<SearchCatalog> = (*catalog).clone();
     let embedder_handle: Arc<SharedEmbedder> = (*embedder).clone();
 
- // Open the Lance store; missing = keyword-only.
+    // Open the Lance store; missing = keyword-only.
     let lance_store = match lance::LanceStore::open_existing(&lance_dir).await {
         Ok(s) => s,
         Err(err) => {
@@ -491,8 +493,8 @@ pub async fn search(
         }
     };
 
- // Only load the embedder if actually have a vector store to
- // query. Keeps keyword-only usage on un-indexed slots cheap.
+    // Only load the embedder if actually have a vector store to
+    // query. Keeps keyword-only usage on un-indexed slots cheap.
     let embedder_instance: Option<Arc<dyn crate::embedder::Embedder>> = if lance_store.is_some() {
         match embedder_handle.get_or_init(model_cache.clone()) {
             Ok(e) => Some(e),
@@ -507,10 +509,10 @@ pub async fn search(
 
     let _ = model_cache;
 
- // Decide which backends to query based on the section filter.
- // - "hm_doc" routes to the decoupled guides backend (BM25-only,
- // independent index lifecycle - see `crate::guides`).
- // - Everything else routes to the hybrid source/Javadoc/asset path.
+    // Decide which backends to query based on the section filter.
+    // - "hm_doc" routes to the decoupled guides backend (BM25-only,
+    // independent index lifecycle - see `crate::guides`).
+    // - Everything else routes to the hybrid source/Javadoc/asset path.
     let want_source_section = match &section_filter {
         None => true,
         Some(types) => types.iter().any(|t| t != "hm_doc"),
@@ -519,9 +521,9 @@ pub async fn search(
         None => true,
         Some(types) => types.iter().any(|t| t == "hm_doc"),
     };
- // The hybrid path no longer needs to see "hm_doc" because guides
- // live in their own index. Strip it so the BM25/Lance section
- // filter doesn't end up matching nothing.
+    // The hybrid path no longer needs to see "hm_doc" because guides
+    // live in their own index. Strip it so the BM25/Lance section
+    // filter doesn't end up matching nothing.
     let hybrid_filter: Option<Vec<String>> = section_filter.as_ref().map(|types| {
         types
             .iter()
@@ -554,13 +556,13 @@ pub async fn search(
     };
 
     if want_guides {
- // Guides have their own lane in the result list (frontend splits
- // by `source_type == "hm_doc"`), so they get their own cap and
- // are NOT bounded by the source-lane `limit`. Otherwise a
- // chatty guides hit would push real source rows out of the
- // user's 10-slot top-N. Cap is a generous fixed value - the
- // guides lane scrolls - but bounded so a degenerate query
- // doesn't ship a 1000-hit payload over IPC.
+        // Guides have their own lane in the result list (frontend splits
+        // by `source_type == "hm_doc"`), so they get their own cap and
+        // are NOT bounded by the source-lane `limit`. Otherwise a
+        // chatty guides hit would push real source rows out of the
+        // user's 10-slot top-N. Cap is a generous fixed value - the
+        // guides lane scrolls - but bounded so a degenerate query
+        // doesn't ship a 1000-hit payload over IPC.
         const GUIDES_LIMIT: usize = 50;
         let slot_label = slot.as_str().to_string();
         let guides_hits_res = tokio::task::spawn_blocking(move || {
@@ -572,10 +574,10 @@ pub async fn search(
             Ok(mut g) => hits.append(&mut g),
             Err(err) => tracing::warn!(?err, "guides search failed"),
         }
- // No global sort/truncate: the frontend splits by
- // `source_type` into separate lanes, so source order is
- // preserved within its lane and guides are appended in their
- // own BM25-score order.
+        // No global sort/truncate: the frontend splits by
+        // `source_type` into separate lanes, so source order is
+        // preserved within its lane and guides are appended in their
+        // own BM25-score order.
     }
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -651,9 +653,9 @@ pub fn get_inline_javadocs(
         return Ok(Vec::new());
     };
 
- // Source-side methods. If symbols.sqlite isn't present (older
- // artifacts), bail to class-level only - no per-method anchors but
- // the class card still renders.
+    // Source-side methods. If symbols.sqlite isn't present (older
+    // artifacts), bail to class-level only - no per-method anchors but
+    // the class card still renders.
     let symbols_path = index_dir.join("symbols.sqlite");
     let source_methods: Vec<crate::indexer::symbols::MethodRow> = if symbols_path.exists() {
         match crate::indexer::symbols::SymbolsDb::open_read_only(&symbols_path) {
@@ -667,7 +669,11 @@ pub fn get_inline_javadocs(
         Vec::new()
     };
 
-    let simple_class = class_fqn.rsplit('.').next().unwrap_or(&class_fqn).to_string();
+    let simple_class = class_fqn
+        .rsplit('.')
+        .next()
+        .unwrap_or(&class_fqn)
+        .to_string();
     let mut out: Vec<InlineJavadoc> = Vec::new();
 
     if !type_description.is_empty() {
@@ -680,11 +686,11 @@ pub fn get_inline_javadocs(
         });
     }
 
- // Pair each Javadoc method to a source method. First pass: exact
- // (name, param_simple_types) match. Second pass: fall back to
- // name-only when exactly one source method has that name. Methods
- // already paired are removed from the working set so a tied
- // overload doesn't silently consume the second match.
+    // Pair each Javadoc method to a source method. First pass: exact
+    // (name, param_simple_types) match. Second pass: fall back to
+    // name-only when exactly one source method has that name. Methods
+    // already paired are removed from the working set so a tied
+    // overload doesn't silently consume the second match.
     let mut pool: Vec<crate::indexer::symbols::MethodRow> = source_methods
         .into_iter()
         .filter(|m| !m.is_constructor)
@@ -692,12 +698,11 @@ pub fn get_inline_javadocs(
 
     let mut paired: Vec<(InlineJavadoc, ())> = Vec::new();
 
- // Pass 1: exact match.
+    // Pass 1: exact match.
     for jdoc in methods.iter() {
-        let pos = pool.iter().position(|m| {
-            m.name == jdoc.name
-                && m.param_simple_types == jdoc.param_simple_types
-        });
+        let pos = pool
+            .iter()
+            .position(|m| m.name == jdoc.name && m.param_simple_types == jdoc.param_simple_types);
         if let Some(idx) = pos {
             let m = pool.remove(idx);
             let header = format!(
@@ -718,19 +723,20 @@ pub fn get_inline_javadocs(
         }
     }
 
- // Pass 2: name-only fallback. Build a histogram of remaining method
- // names; only fall through when exactly one source method shares
- // the Javadoc name (so don't guess on ambiguous overloads).
+    // Pass 2: name-only fallback. Build a histogram of remaining method
+    // names; only fall through when exactly one source method shares
+    // the Javadoc name (so don't guess on ambiguous overloads).
     let mut name_counts: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
     for m in &pool {
         *name_counts.entry(m.name.clone()).or_insert(0) += 1;
     }
     for jdoc in methods.iter() {
- // Skip if already paired.
+        // Skip if already paired.
         if paired.iter().any(|(p, _)| {
             p.kind == "method"
-                && p.header.starts_with(&format!("{simple_class}.{}(", jdoc.name))
+                && p.header
+                    .starts_with(&format!("{simple_class}.{}(", jdoc.name))
                 && p.prose == jdoc.prose
         }) {
             continue;
@@ -819,23 +825,23 @@ pub fn find_source_siblings(
 pub fn read_source(slot: Slot, path: String, source_type: String) -> Result<String, String> {
     let data_dir = data_dir()?;
     let base = match source_type.as_str() {
- // Empty string is the legacy fallback for older artifacts that
- // pre-date the `source_type` field; treat as decompiled Java.
+        // Empty string is the legacy fallback for older artifacts that
+        // pre-date the `source_type` field; treat as decompiled Java.
         "source" | "" => patcher::workspace_for(data_dir.as_path(), slot).join("decompile"),
         "hm_doc" => atlas_cache_root().join("hm-docs").join("site"),
         "hypixel_doc" => indexer::javadocs_dir_for(data_dir.as_path(), slot),
         other => return Err(format!("unsupported source_type: {other}")),
     };
     let raw = indexer::read_source(&base, &path).map_err(|e| format!("{e:#}"))?;
- // Javadoc pages are HTML and look like a wall of markup in the
- // viewer. Render through the same parser the indexer uses so the
- // user sees the same prose that got chunked + embedded.
+    // Javadoc pages are HTML and look like a wall of markup in the
+    // viewer. Render through the same parser the indexer uses so the
+    // user sees the same prose that got chunked + embedded.
     if source_type == "hypixel_doc" {
         if let Some(rendered) = indexer::hypixel_docs::render_class_page(&path, &raw) {
             return Ok(rendered);
         }
- // Fall through to raw HTML if parsing fails - better something
- // than nothing.
+        // Fall through to raw HTML if parsing fails - better something
+        // than nothing.
     }
     Ok(raw)
 }
@@ -882,8 +888,8 @@ pub fn index_fetch(
     let data_dir = data_dir()?;
     let indexes_root = fetcher::indexes_root(data_dir.as_path());
 
- // Transition to a non-Idle state synchronously so a poll right
- // after this call sees the fetch as in-flight.
+    // Transition to a non-Idle state synchronously so a poll right
+    // after this call sees the fetch as in-flight.
     status.set(FetchStatus::Phase {
         build_id: request.build_id.clone(),
         phase: fetcher::status::FetchPhase::Resolving,
@@ -902,9 +908,9 @@ pub fn index_fetch(
                 path = %mounted.mounted_at.display(),
                 "artifact mounted"
             );
- // The fetcher just rewrote `<indexes_root>/{tantivy,lance}/<slot>/`
- // under the hood; any cached `OpenedIndex` for that slot is now
- // stale and must be re-opened on the next search.
+            // The fetcher just rewrote `<indexes_root>/{tantivy,lance}/<slot>/`
+            // under the hood; any cached `OpenedIndex` for that slot is now
+            // stale and must be re-opened on the next search.
             let slot = match mounted.manifest.hytale_patchline.as_deref() {
                 Some("pre-release") => Slot::PreRelease,
                 _ => Slot::Release,
@@ -943,8 +949,8 @@ pub fn index_mount_local(
         .unwrap_or("local-artifact")
         .to_string();
 
- // Same trick as `index_fetch`: flip out of Idle synchronously so a
- // poll right after this call sees the mount as in-flight.
+    // Same trick as `index_fetch`: flip out of Idle synchronously so a
+    // poll right after this call sees the mount as in-flight.
     status.set(FetchStatus::Phase {
         build_id: provisional_id,
         phase: fetcher::status::FetchPhase::Verifying,
@@ -986,7 +992,7 @@ pub struct MountedIndexEntry {
     pub build_id: String,
     pub path: PathBuf,
     pub manifest: fetcher::manifest::Manifest,
- /// Total bytes on disk for the mounted dir.
+    /// Total bytes on disk for the mounted dir.
     pub size_bytes: u64,
 }
 
@@ -1000,7 +1006,8 @@ pub fn index_catalog() -> Result<Vec<MountedIndexEntry>, String> {
     if !root.is_dir() {
         return Ok(Vec::new());
     }
-    let entries = std::fs::read_dir(&root).map_err(|e| format!("listing {}: {e}", root.display()))?;
+    let entries =
+        std::fs::read_dir(&root).map_err(|e| format!("listing {}: {e}", root.display()))?;
     let mut out = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
@@ -1202,8 +1209,7 @@ pub fn index_remove(
     catalog.invalidate(target_slot);
     catalog.invalidate_id(&indexer::IndexId::new(&build_id));
 
-    std::fs::remove_dir_all(&target)
-        .map_err(|e| format!("removing {}: {e}", target.display()))?;
+    std::fs::remove_dir_all(&target).map_err(|e| format!("removing {}: {e}", target.display()))?;
     Ok(())
 }
 
@@ -1290,8 +1296,7 @@ fn extract_impl_version(body: &str) -> Option<String> {
 // =====================================================================
 
 use crate::project::{
-    self, index::ProjectSink, ProjectId, ProjectRegistry, RegisteredProject,
-    SharedProjectRegistry,
+    self, index::ProjectSink, ProjectId, ProjectRegistry, RegisteredProject, SharedProjectRegistry,
 };
 
 /// JSON view of a registered project for the frontend. Mirrors
@@ -1342,15 +1347,8 @@ pub fn project_register(
 /// Snapshot of the current project list. Cheap; called on every
 /// IndexCatalog / Settings render.
 #[tauri::command]
-pub fn project_list(
-    registry: State<'_, Arc<SharedProjectRegistry>>,
-) -> Vec<ProjectListEntry> {
-    registry.with(|r| {
-        r.list()
-            .iter()
-            .map(|p| to_entry(r, p))
-            .collect()
-    })
+pub fn project_list(registry: State<'_, Arc<SharedProjectRegistry>>) -> Vec<ProjectListEntry> {
+    registry.with(|r| r.list().iter().map(|p| to_entry(r, p)).collect())
 }
 
 /// Drop the project from the registry AND wipe its index dir on disk.
@@ -1412,18 +1410,17 @@ pub fn project_index(
 
     // Resolve paths up front so the spawned task doesn't have to touch
     // the registry mutex from the indexer thread.
-    let (source_path, index_dir, lance_dir, index_id) = registry
-        .with(|r| {
-            let p = r
-                .get(&pid)
-                .ok_or_else(|| format!("no project with id {pid}"))?;
-            Ok::<_, String>((
-                p.source_path.clone(),
-                r.project_index_dir(&pid),
-                r.project_lance_dir(&pid),
-                r.index_id(&pid),
-            ))
-        })?;
+    let (source_path, index_dir, lance_dir, index_id) = registry.with(|r| {
+        let p = r
+            .get(&pid)
+            .ok_or_else(|| format!("no project with id {pid}"))?;
+        Ok::<_, String>((
+            p.source_path.clone(),
+            r.project_index_dir(&pid),
+            r.project_lance_dir(&pid),
+            r.index_id(&pid),
+        ))
+    })?;
 
     // Resolve the embedder model cache the same way `commands::index_start`
     // does so the BGE-small download is shared across desktop indexing
@@ -1509,12 +1506,11 @@ pub fn diff_run(
 
     // Project source dir comes from the registry.
     let pid = ProjectId::from(project_id);
-    let project_dir = registry
-        .with(|r| {
-            r.get(&pid)
-                .map(|p| p.source_path.clone())
-                .ok_or_else(|| format!("no project with id {pid}"))
-        })?;
+    let project_dir = registry.with(|r| {
+        r.get(&pid)
+            .map(|p| p.source_path.clone())
+            .ok_or_else(|| format!("no project with id {pid}"))
+    })?;
 
     // Both builds must be currently mounted. Resolve symbols.sqlite via
     // the helper so we don't care whether it's at <root>/symbols.sqlite
@@ -1523,8 +1519,12 @@ pub fn diff_run(
     let (baseline_root, baseline_label) = lookup_mount(&mounts, &baseline_build_id)?;
     let (target_root, target_label) = lookup_mount(&mounts, &target_build_id)?;
 
-    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root)
-        .ok_or_else(|| format!("no symbols.sqlite in baseline at {}", baseline_root.display()))?;
+    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root).ok_or_else(|| {
+        format!(
+            "no symbols.sqlite in baseline at {}",
+            baseline_root.display()
+        )
+    })?;
     let target_symbols = crate::diff::pick_symbols_path(&target_root)
         .ok_or_else(|| format!("no symbols.sqlite in target at {}", target_root.display()))?;
 
@@ -1552,8 +1552,12 @@ pub fn index_compare(
     let (baseline_root, baseline_label) = lookup_mount(&mounts, &baseline_build_id)?;
     let (target_root, target_label) = lookup_mount(&mounts, &target_build_id)?;
 
-    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root)
-        .ok_or_else(|| format!("no symbols.sqlite in baseline at {}", baseline_root.display()))?;
+    let baseline_symbols = crate::diff::pick_symbols_path(&baseline_root).ok_or_else(|| {
+        format!(
+            "no symbols.sqlite in baseline at {}",
+            baseline_root.display()
+        )
+    })?;
     let target_symbols = crate::diff::pick_symbols_path(&target_root)
         .ok_or_else(|| format!("no symbols.sqlite in target at {}", target_root.display()))?;
 
@@ -1570,10 +1574,7 @@ pub fn index_compare(
 /// The label is what the report quotes in headings; we prefer the
 /// human-readable patchline + Hytale impl-version, falling back to the
 /// raw build id if the manifest is sparse.
-fn lookup_mount(
-    mounts: &[MountedIndexEntry],
-    build_id: &str,
-) -> Result<(PathBuf, String), String> {
+fn lookup_mount(mounts: &[MountedIndexEntry], build_id: &str) -> Result<(PathBuf, String), String> {
     let entry = mounts
         .iter()
         .find(|m| m.build_id == build_id)
@@ -1633,10 +1634,7 @@ pub fn state_note_set(
 }
 
 #[tauri::command]
-pub fn state_note_get(
-    db: State<'_, Arc<StateDb>>,
-    pin_id: i64,
-) -> Result<Option<String>, String> {
+pub fn state_note_get(db: State<'_, Arc<StateDb>>, pin_id: i64) -> Result<Option<String>, String> {
     db.note_get(pin_id).map_err(|e| format!("{e:#}"))
 }
 
@@ -1653,8 +1651,6 @@ pub fn state_recent_file_record(
 }
 
 #[tauri::command]
-pub fn state_recent_files(
-    db: State<'_, Arc<StateDb>>,
-) -> Result<Vec<RecentFile>, String> {
+pub fn state_recent_files(db: State<'_, Arc<StateDb>>) -> Result<Vec<RecentFile>, String> {
     db.recent_files().map_err(|e| format!("{e:#}"))
 }

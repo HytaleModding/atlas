@@ -57,8 +57,7 @@ pub fn compare(
     let base_fqns = baseline.all_class_fqns()?;
     let target_fqns = target.all_class_fqns()?;
 
-    let base_set: std::collections::BTreeSet<&str> =
-        base_fqns.iter().map(|s| s.as_str()).collect();
+    let base_set: std::collections::BTreeSet<&str> = base_fqns.iter().map(|s| s.as_str()).collect();
     let target_set: std::collections::BTreeSet<&str> =
         target_fqns.iter().map(|s| s.as_str()).collect();
 
@@ -75,10 +74,8 @@ pub fn compare(
     let classes_added_total = added_iter.len();
     let classes_removed_total = removed_iter.len();
 
-    let classes_added: Vec<String> =
-        added_iter.into_iter().take(MAX_LIST_LEN).collect();
-    let classes_removed: Vec<String> =
-        removed_iter.into_iter().take(MAX_LIST_LEN).collect();
+    let classes_added: Vec<String> = added_iter.into_iter().take(MAX_LIST_LEN).collect();
+    let classes_removed: Vec<String> = removed_iter.into_iter().take(MAX_LIST_LEN).collect();
 
     Ok(CompareReport {
         baseline_label,

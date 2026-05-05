@@ -74,9 +74,8 @@ impl AnthropicSummarizer {
     pub const PROMPT_VERSION: u32 = 2;
 
     pub fn new(api_key: String, cache_dir: PathBuf) -> Result<Self> {
-        fs::create_dir_all(&cache_dir).with_context(|| {
-            format!("creating summary cache dir {}", cache_dir.display())
-        })?;
+        fs::create_dir_all(&cache_dir)
+            .with_context(|| format!("creating summary cache dir {}", cache_dir.display()))?;
         Ok(Self {
             api_key,
             model: Self::DEFAULT_MODEL.to_string(),
@@ -102,12 +101,10 @@ impl AnthropicSummarizer {
     fn write_cache(&self, hash: &str, summary: &str) -> Result<()> {
         let path = self.cache_path(hash);
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("creating cache shard {}", parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("creating cache shard {}", parent.display()))?;
         }
-        fs::write(&path, summary)
-            .with_context(|| format!("writing cache {}", path.display()))?;
+        fs::write(&path, summary).with_context(|| format!("writing cache {}", path.display()))?;
         Ok(())
     }
 }
@@ -147,8 +144,7 @@ impl Summarizer for AnthropicSummarizer {
             anyhow::bail!("anthropic api returned {status}: {body}");
         }
 
-        let parsed: AnthropicResponse =
-            resp.json().await.context("parsing anthropic response")?;
+        let parsed: AnthropicResponse = resp.json().await.context("parsing anthropic response")?;
 
         let summary = parsed
             .content

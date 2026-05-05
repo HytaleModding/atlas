@@ -43,11 +43,7 @@ pub const SHA256SUMS_FILENAME: &str = "SHA256SUMS";
 /// Files that live at the tarball root and are NOT themselves listed in
 /// `SHA256SUMS` (they sit outside the per-file digest loop because the
 /// manifest covers `SHA256SUMS` and the signature covers the manifest).
-pub const DIGEST_EXEMPT: &[&str] = &[
-    MANIFEST_FILENAME,
-    SIGNATURE_FILENAME,
-    SHA256SUMS_FILENAME,
-];
+pub const DIGEST_EXEMPT: &[&str] = &[MANIFEST_FILENAME, SIGNATURE_FILENAME, SHA256SUMS_FILENAME];
 
 /// Artifact manifest written at the root of every `.tar.zst` blob.
 ///
@@ -229,8 +225,8 @@ impl Sha256Sums {
 /// SHA256 a file on disk, streaming so we don't peak on large
 /// `.tar.zst` payloads.
 pub fn sha256_file(path: &Path) -> Result<String> {
-    let mut file = File::open(path)
-        .with_context(|| format!("opening {} for hashing", path.display()))?;
+    let mut file =
+        File::open(path).with_context(|| format!("opening {} for hashing", path.display()))?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
     loop {

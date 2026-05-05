@@ -35,23 +35,11 @@ impl PatcherPhase {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum PatcherStatus {
     Idle,
-    Phase {
-        phase: PatcherPhase,
-    },
-    Downloading {
-        received: u64,
-        total: Option<u64>,
-    },
-    Extracting {
-        current: usize,
-        total: usize,
-    },
-    Done {
-        output_dir: PathBuf,
-    },
-    Error {
-        message: String,
-    },
+    Phase { phase: PatcherPhase },
+    Downloading { received: u64, total: Option<u64> },
+    Extracting { current: usize, total: usize },
+    Done { output_dir: PathBuf },
+    Error { message: String },
 }
 
 impl Default for PatcherStatus {

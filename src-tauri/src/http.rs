@@ -1,7 +1,7 @@
 //! Embedded Axum HTTP server.
 //!
-//! Hosts `/healthz` and, as of , the MCP streamable-HTTP
-//! service at `/mcp`. This endpoint exists so:
+//! Hosts `/healthz` and the MCP streamable-HTTP service at `/mcp`.
+//! This endpoint exists so:
 //!   * the front-end can verify the backend booted
 //!   * agents (Claude Code, Cursor) can reach Atlas tools without
 //!     speaking Tauri IPC
@@ -46,13 +46,11 @@ pub fn router(state: McpState) -> Router {
 /// Spawn the Axum server on a background Tokio task. Returns the
 /// bound port so the Tauri side can log it / expose it to the
 /// front-end later.
-pub async fn serve(state: McpState) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn serve(state: McpState) -> anyhow::Result<u16> {
     let addr = SocketAddr::from(([127, 0, 0, 1], 0));
     let listener = TcpListener::bind(addr).await?;
     let bound = listener.local_addr()?.port();
-    tracing::info!(
-        "atlas http listening on http://127.0.0.1:{bound} (MCP at /mcp)"
-    );
+    tracing::info!("atlas http listening on http://127.0.0.1:{bound} (MCP at /mcp)");
 
     tokio::spawn(async move {
         if let Err(err) = axum::serve(listener, router(state)).await {

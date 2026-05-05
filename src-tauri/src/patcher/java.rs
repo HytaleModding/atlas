@@ -42,9 +42,8 @@ pub async fn ensure_java() -> Result<PathBuf> {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let major = parse_major_version(&text).ok_or_else(|| {
-        anyhow!("could not parse Java version from output:\n{text}")
-    })?;
+    let major = parse_major_version(&text)
+        .ok_or_else(|| anyhow!("could not parse Java version from output:\n{text}"))?;
 
     if major < MIN_JAVA_MAJOR {
         return Err(anyhow!(

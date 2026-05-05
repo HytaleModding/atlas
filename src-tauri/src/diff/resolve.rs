@@ -104,9 +104,7 @@ fn format_signature(return_type: &Option<String>, params: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::indexer::chunker::{
-        ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind,
-    };
+    use crate::indexer::chunker::{ClassSymbol, FieldSymbol, FileSymbols, MethodSymbol, TypeKind};
     use tempfile::tempdir;
 
     fn build_db_with_one_class(deprecated: bool) -> (tempfile::TempDir, std::path::PathBuf) {

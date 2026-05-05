@@ -141,9 +141,7 @@ where
         (_, Some(n)) => Some(n),
         (_, None) => None,
     };
-    progress
-        .total
-        .store(total.unwrap_or(0), Ordering::Relaxed);
+    progress.total.store(total.unwrap_or(0), Ordering::Relaxed);
     on_progress(progress.received(), total);
 
     let mut stream = resp.bytes_stream();
@@ -152,7 +150,9 @@ where
         file.write_all(&chunk)
             .await
             .with_context(|| format!("writing to {}", partial.display()))?;
-        let new_received = progress.received.fetch_add(chunk.len() as u64, Ordering::Relaxed)
+        let new_received = progress
+            .received
+            .fetch_add(chunk.len() as u64, Ordering::Relaxed)
             + chunk.len() as u64;
         on_progress(new_received, total);
     }
@@ -162,13 +162,9 @@ where
     // Success → rename into final place. Anyone observing `<dest>`
     // without `.partial` can assume the download completed, though
     // they still need to run `artifact::verify` before trusting it.
-    tokio::fs::rename(&partial, &req.dest).await.with_context(|| {
-        format!(
-            "renaming {} → {}",
-            partial.display(),
-            req.dest.display()
-        )
-    })?;
+    tokio::fs::rename(&partial, &req.dest)
+        .await
+        .with_context(|| format!("renaming {} → {}", partial.display(), req.dest.display()))?;
     Ok(())
 }
 

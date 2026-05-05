@@ -35,31 +35,31 @@ use scraper::{ElementRef, Html, Selector};
 
 /// One Javadoc class page rendered as a single search chunk.
 pub struct JavadocEntry {
- /// Path relative to the cache root, forward-slash form.
- /// E.g. `com/hytale/server/api/PlayerService.html`.
+    /// Path relative to the cache root, forward-slash form.
+    /// E.g. `com/hytale/server/api/PlayerService.html`.
     pub rel_path: String,
- /// Fully-qualified type name, e.g. `com.hytale.server.api.PlayerService`.
+    /// Fully-qualified type name, e.g. `com.hytale.server.api.PlayerService`.
     pub fqn: String,
- /// Simple type name, e.g. `PlayerService`.
+    /// Simple type name, e.g. `PlayerService`.
     pub simple_name: String,
- /// One of `"class"`, `"interface"`, `"enum"`, `"record"`,
- /// `"annotation"`, or `"unknown"` if the header couldn't be parsed.
+    /// One of `"class"`, `"interface"`, `"enum"`, `"record"`,
+    /// `"annotation"`, or `"unknown"` if the header couldn't be parsed.
     pub kind: String,
- /// Full prose body - class description + every method description,
- /// separated by blank lines. Plain text, HTML stripped.
+    /// Full prose body - class description + every method description,
+    /// separated by blank lines. Plain text, HTML stripped.
     pub body: String,
- /// Just the class-level prose description (the `<section class="description">`
- /// block), without method details concatenated in. Used for aux-text
- /// injection on matching source chunks: prepending the full `body`
- /// would bloat every method chunk in a 30-method class with the
- /// same hundreds of lines of doc text. Empty when the page has no
- /// class-level description.
+    /// Just the class-level prose description (the `<section class="description">`
+    /// block), without method details concatenated in. Used for aux-text
+    /// injection on matching source chunks: prepending the full `body`
+    /// would bloat every method chunk in a 30-method class with the
+    /// same hundreds of lines of doc text. Empty when the page has no
+    /// class-level description.
     pub type_description: String,
- /// Total line count of `body`, used for UI readout.
+    /// Total line count of `body`, used for UI readout.
     pub line_count: u64,
- /// Per-method docs preserved with structure. lets the
- /// source viewer render an inline Javadoc card above each method's
- /// declaration, not just one card at the class level.
+    /// Per-method docs preserved with structure. lets the
+    /// source viewer render an inline Javadoc card above each method's
+    /// declaration, not just one card at the class level.
     pub methods: Vec<MethodDoc>,
 }
 
@@ -70,20 +70,20 @@ pub struct JavadocEntry {
 /// without having to round-trip through full type resolution.
 #[derive(Clone, Debug)]
 pub struct MethodDoc {
- /// Method name as it appears in the Javadoc heading. Constructors
- /// keep their class name; don't translate them to `<init>`.
+    /// Method name as it appears in the Javadoc heading. Constructors
+    /// keep their class name; don't translate them to `<init>`.
     pub name: String,
- /// Parameter types in order, reduced to their simple (last-segment)
- /// names with generics stripped. `java.util.List<String>` → `List`.
+    /// Parameter types in order, reduced to their simple (last-segment)
+    /// names with generics stripped. `java.util.List<String>` → `List`.
     pub param_simple_types: Vec<String>,
- /// Return type's simple name, when extractable. `Optional<T>` → `Optional`.
- /// Empty for constructors and when the signature can't be parsed.
+    /// Return type's simple name, when extractable. `Optional<T>` → `Optional`.
+    /// Empty for constructors and when the signature can't be parsed.
     pub return_type_simple_name: Option<String>,
- /// Description prose (HTML stripped, whitespace collapsed). May be
- /// empty when the doclet emitted only the signature.
+    /// Description prose (HTML stripped, whitespace collapsed). May be
+    /// empty when the doclet emitted only the signature.
     pub prose: String,
- /// True when the doclet rendered a `<span class="deprecated-label">`
- /// or equivalent marker inside the method block.
+    /// True when the doclet rendered a `<span class="deprecated-label">`
+    /// or equivalent marker inside the method block.
     pub deprecated: bool,
 }
 
@@ -99,8 +99,7 @@ pub fn walk_cache(cache_dir: &Path) -> Result<Vec<JavadocEntry>> {
     let mut out = Vec::new();
     let walker = walkdir::WalkDir::new(cache_dir).follow_links(false);
     for entry in walker {
-        let entry =
-            entry.with_context(|| format!("walking {}", cache_dir.display()))?;
+        let entry = entry.with_context(|| format!("walking {}", cache_dir.display()))?;
         if !entry.file_type().is_file() {
             continue;
         }
@@ -115,8 +114,8 @@ pub fn walk_cache(cache_dir: &Path) -> Result<Vec<JavadocEntry>> {
         if is_non_class_page(file_name) {
             continue;
         }
-        let html = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let html =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         let rel_path = path
             .strip_prefix(cache_dir)
             .with_context(|| format!("relativizing {}", path.display()))?
@@ -142,8 +141,7 @@ pub fn walk_cache_paths(cache_dir: &Path) -> Result<Vec<(String, PathBuf)>> {
     let mut out = Vec::new();
     let walker = walkdir::WalkDir::new(cache_dir).follow_links(false);
     for entry in walker {
-        let entry =
-            entry.with_context(|| format!("walking {}", cache_dir.display()))?;
+        let entry = entry.with_context(|| format!("walking {}", cache_dir.display()))?;
         if !entry.file_type().is_file() {
             continue;
         }
@@ -162,10 +160,7 @@ pub fn walk_cache_paths(cache_dir: &Path) -> Result<Vec<(String, PathBuf)>> {
             Ok(r) => r.to_string_lossy().replace('\\', "/"),
             Err(_) => continue,
         };
-        let stem = match Path::new(&rel)
-            .file_stem()
-            .and_then(|s| s.to_str())
-        {
+        let stem = match Path::new(&rel).file_stem().and_then(|s| s.to_str()) {
             Some(s) => s.to_string(),
             None => continue,
         };
@@ -214,9 +209,9 @@ fn is_non_class_page(name: &str) -> bool {
 pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
     let doc = Html::parse_document(html);
 
- // The type header lives in `<h1 class="title">` for the standard
- // doclet. Format: "Class Foo", "Interface Bar", "Enum Class Baz",
- // "Record Class Qux", "Annotation Interface MyAnno".
+    // The type header lives in `<h1 class="title">` for the standard
+    // doclet. Format: "Class Foo", "Interface Bar", "Enum Class Baz",
+    // "Record Class Qux", "Annotation Interface MyAnno".
     let h1_sel = Selector::parse("h1.title, h1[title]").ok()?;
     let header_raw = doc
         .select(&h1_sel)
@@ -226,8 +221,8 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
         .as_deref()
         .and_then(parse_type_header)
         .unwrap_or_else(|| {
- // Fallback: derive simple name from filename stem; mark kind
- // unknown so callers can tell parsing was lossy.
+            // Fallback: derive simple name from filename stem; mark kind
+            // unknown so callers can tell parsing was lossy.
             let stem = std::path::Path::new(rel_path)
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -243,13 +238,13 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
         format!("{package}.{simple_name}")
     };
 
- // Type-level prose: the standard doclet renders this as `<div class="block">`
- // immediately after the header. Older templates use
- // `<section class="description"> ... <div class="block">`.
- // Tracked separately from method details so aux-text injection
- // (prepending Javadoc prose onto matching source chunks) can use
- // just the class-level summary without bloating every chunk with
- // every method's prose.
+    // Type-level prose: the standard doclet renders this as `<div class="block">`
+    // immediately after the header. Older templates use
+    // `<section class="description"> ... <div class="block">`.
+    // Tracked separately from method details so aux-text injection
+    // (prepending Javadoc prose onto matching source chunks) can use
+    // just the class-level summary without bloating every chunk with
+    // every method's prose.
     let mut sections: Vec<String> = Vec::new();
     let mut type_description = String::new();
     let type_block_sel = Selector::parse(
@@ -264,14 +259,14 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
         }
     }
 
- // Method-level prose. Each method's detail block lives under
- // `section.detail` (Java 11+) or `<a id="...">` blocks (older).
- // Walk every `section.detail`, pull (heading, signature, block) once
- // per section, push the prose into the BM25/embedding `body` and
- // also build a structured `MethodDoc` for the inline-Javadoc
- // resolver. Field-detail sections also flow through
- // here; keep their prose in the body for retrieval but skip them
- // in `methods` because the inline anchor only targets methods.
+    // Method-level prose. Each method's detail block lives under
+    // `section.detail` (Java 11+) or `<a id="...">` blocks (older).
+    // Walk every `section.detail`, pull (heading, signature, block) once
+    // per section, push the prose into the BM25/embedding `body` and
+    // also build a structured `MethodDoc` for the inline-Javadoc
+    // resolver. Field-detail sections also flow through
+    // here; keep their prose in the body for retrieval but skip them
+    // in `methods` because the inline anchor only targets methods.
     let detail_section_sel = Selector::parse("section.detail").ok()?;
     let h_sel = Selector::parse("h3, h4").ok()?;
     let sig_sel = Selector::parse("div.member-signature, .member-signature").ok()?;
@@ -315,15 +310,15 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
             .next()
             .map(|el| collapse_whitespace(&el.text().collect::<String>()))
             .unwrap_or_default();
- // Only emit a `MethodDoc` when the signature contains a parameter
- // list, since that's how distinguish methods/constructors from
- // fields and enum constants without baking in a tag list.
+        // Only emit a `MethodDoc` when the signature contains a parameter
+        // list, since that's how distinguish methods/constructors from
+        // fields and enum constants without baking in a tag list.
         if !sig.contains('(') {
             continue;
         }
- // Skip methods Hypixel left fully undocumented. Without a
- // description block and without any notes, the inline anchor
- // would render as a header with nothing under it.
+        // Skip methods Hypixel left fully undocumented. Without a
+        // description block and without any notes, the inline anchor
+        // would render as a header with nothing under it.
         if prose.is_empty() {
             continue;
         }
@@ -338,9 +333,9 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
         });
     }
 
- // Defensive fallback: if neither selector matched anything, scrape
- // visible text from `<main>` so the page still contributes some
- // signal to the index. Better stale match than no match.
+    // Defensive fallback: if neither selector matched anything, scrape
+    // visible text from `<main>` so the page still contributes some
+    // signal to the index. Better stale match than no match.
     if sections.is_empty() {
         let main_sel = Selector::parse("main, body").ok()?;
         if let Some(el) = doc.select(&main_sel).next() {
@@ -352,12 +347,12 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
     }
 
     if sections.is_empty() {
- // Truly empty page - drop it.
+        // Truly empty page - drop it.
         return None;
     }
 
- // Lead with the FQN so BM25 + the embedder both see the symbol name
- // up front. Mirrors what for source chunks.
+    // Lead with the FQN so BM25 + the embedder both see the symbol name
+    // up front. Mirrors what for source chunks.
     let mut body = String::with_capacity(64 + sections.iter().map(|s| s.len()).sum::<usize>());
     body.push_str(&fqn);
     body.push('\n');
@@ -393,9 +388,9 @@ pub fn parse_class_page(rel_path: &str, html: &str) -> Option<JavadocEntry> {
 /// fall back to name-only matching against the source. Never throw on
 /// signatures don't recognise - better a miss than a panic.
 fn parse_method_signature(sig: &str) -> (Vec<String>, Option<String>) {
- // Find the first top-level `(`. Anything before it is modifiers +
- // type params + return type + method name; anything between it and
- // its matching `)` is the parameter list.
+    // Find the first top-level `(`. Anything before it is modifiers +
+    // type params + return type + method name; anything between it and
+    // its matching `)` is the parameter list.
     let bytes = sig.as_bytes();
     let mut depth_angle: i32 = 0;
     let mut paren_open: Option<usize> = None;
@@ -413,7 +408,7 @@ fn parse_method_signature(sig: &str) -> (Vec<String>, Option<String>) {
     let Some(open) = paren_open else {
         return (Vec::new(), None);
     };
- // Find matching `)` allowing nested generics inside the parameter list.
+    // Find matching `)` allowing nested generics inside the parameter list.
     let mut depth_paren: i32 = 1;
     depth_angle = 0;
     let mut close: Option<usize> = None;
@@ -437,7 +432,7 @@ fn parse_method_signature(sig: &str) -> (Vec<String>, Option<String>) {
         None => return (Vec::new(), None),
     };
 
- // Parameter list - split at top-level commas.
+    // Parameter list - split at top-level commas.
     let params_str = &sig[open + 1..close];
     let mut params: Vec<String> = Vec::new();
     if !params_str.trim().is_empty() {
@@ -469,10 +464,10 @@ fn parse_method_signature(sig: &str) -> (Vec<String>, Option<String>) {
         }
     }
 
- // Return type: scan backwards from `(` skipping the method name.
- // Layout is "<modifiers...> <return-type> <method-name>(", so the
- // last whitespace-separated token before `(` is the method name and
- // the token before that is the return type's tail.
+    // Return type: scan backwards from `(` skipping the method name.
+    // Layout is "<modifiers...> <return-type> <method-name>(", so the
+    // last whitespace-separated token before `(` is the method name and
+    // the token before that is the return type's tail.
     let head = sig[..open].trim();
     let return_type = head
         .rsplit_once(char::is_whitespace)
@@ -496,25 +491,25 @@ fn simple_type_of_param(part: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
- // Strip leading annotations like `@NotNull` (no-op when absent).
+    // Strip leading annotations like `@NotNull` (no-op when absent).
     let mut tokens: Vec<&str> = trimmed.split_whitespace().collect();
     while tokens.first().is_some_and(|t| t.starts_with('@')) {
         tokens.remove(0);
     }
- // Strip leading `final` modifier on params (Javadoc rarely emits it
- // but be defensive).
+    // Strip leading `final` modifier on params (Javadoc rarely emits it
+    // but be defensive).
     if tokens.first() == Some(&"final") {
         tokens.remove(0);
     }
     if tokens.is_empty() {
         return None;
     }
- // The last token is usually the variable name; the type can span
- // multiple tokens when generics or arrays got split by whitespace
- // (rare, but `Map<K, V>` after split_whitespace becomes `Map<K,` `V>`).
- // Take everything except the last token, then if the type still has
- // unbalanced angle brackets it means whitespace inside a generic
- // separated us - recombine until balanced.
+    // The last token is usually the variable name; the type can span
+    // multiple tokens when generics or arrays got split by whitespace
+    // (rare, but `Map<K, V>` after split_whitespace becomes `Map<K,` `V>`).
+    // Take everything except the last token, then if the type still has
+    // unbalanced angle brackets it means whitespace inside a generic
+    // separated us - recombine until balanced.
     if tokens.len() == 1 {
         return Some(simple_type_name(tokens[0]));
     }
@@ -522,7 +517,7 @@ fn simple_type_of_param(part: &str) -> Option<String> {
     let opens = type_part.matches('<').count();
     let closes = type_part.matches('>').count();
     if opens != closes {
- // Variable name actually belonged to the type - rejoin all.
+        // Variable name actually belonged to the type - rejoin all.
         type_part = tokens.join(" ");
     }
     Some(simple_type_name(&type_part))
@@ -537,13 +532,13 @@ fn simple_type_of_param(part: &str) -> Option<String> {
 /// the Javadoc side.
 pub fn simple_type_name(t: &str) -> String {
     let s = t.trim();
- // Drop generic params, array brackets, varargs ellipsis, and any
- // type-bound suffix (e.g. `T extends Foo`).
+    // Drop generic params, array brackets, varargs ellipsis, and any
+    // type-bound suffix (e.g. `T extends Foo`).
     let s = s.split('<').next().unwrap_or(s);
     let s = s.split('[').next().unwrap_or(s);
     let s = s.split("...").next().unwrap_or(s);
     let s = s.split_whitespace().next().unwrap_or(s);
- // Take the last `.`-separated segment for FQNs.
+    // Take the last `.`-separated segment for FQNs.
     s.rsplit('.').next().unwrap_or(s).to_string()
 }
 
@@ -561,14 +556,14 @@ pub fn simple_type_name(t: &str) -> String {
 pub fn render_class_page(rel_path: &str, html: &str) -> Option<String> {
     let doc = Html::parse_document(html);
 
- // Header - same selector as parse_class_page.
+    // Header - same selector as parse_class_page.
     let h1_sel = Selector::parse("h1.title, h1[title]").ok()?;
     let header_raw = doc
         .select(&h1_sel)
         .next()
         .map(|el| collapse_whitespace(&el.text().collect::<String>()))?;
-    let (kind, simple_name) = parse_type_header(&header_raw)
-        .unwrap_or_else(|| ("type".to_string(), header_raw.clone()));
+    let (kind, simple_name) =
+        parse_type_header(&header_raw).unwrap_or_else(|| ("type".to_string(), header_raw.clone()));
     let package = derive_package(rel_path);
     let fqn = if package.is_empty() {
         simple_name.clone()
@@ -584,8 +579,9 @@ pub fn render_class_page(rel_path: &str, html: &str) -> Option<String> {
     out.push_str(&simple_name);
     out.push_str("\n\n");
 
- // Class signature line if present (e.g. "public class Foo extends Bar").
-    if let Ok(sig_sel) = Selector::parse("section.description div.type-signature, .type-signature") {
+    // Class signature line if present (e.g. "public class Foo extends Bar").
+    if let Ok(sig_sel) = Selector::parse("section.description div.type-signature, .type-signature")
+    {
         if let Some(el) = doc.select(&sig_sel).next() {
             let sig = collapse_whitespace(&el.text().collect::<String>());
             if !sig.is_empty() {
@@ -595,7 +591,7 @@ pub fn render_class_page(rel_path: &str, html: &str) -> Option<String> {
         }
     }
 
- // Type-level description.
+    // Type-level description.
     if let Ok(desc_sel) = Selector::parse(
         "section.description div.block, .description > .block, #class-description div.block",
     ) {
@@ -608,12 +604,12 @@ pub fn render_class_page(rel_path: &str, html: &str) -> Option<String> {
         }
     }
 
- // Method details - render each `<section class="detail">` block as
- // its own headed paragraph. Standard Java 11+ doclet wraps each
- // member in `<section class="detail">` containing an `<h3>` (member
- // name), an optional `<div class="member-signature">`, and a
- // `<div class="block">` (description). Emit name + signature as a
- // visual separator so the viewer reads like a doc, not a blob.
+    // Method details - render each `<section class="detail">` block as
+    // its own headed paragraph. Standard Java 11+ doclet wraps each
+    // member in `<section class="detail">` containing an `<h3>` (member
+    // name), an optional `<div class="member-signature">`, and a
+    // `<div class="block">` (description). Emit name + signature as a
+    // visual separator so the viewer reads like a doc, not a blob.
     if let Ok(detail_section_sel) = Selector::parse("section.detail") {
         let h_sel = Selector::parse("h3, h4").ok()?;
         let sig_sel = Selector::parse("div.member-signature, .member-signature").ok()?;
@@ -758,9 +754,9 @@ fn parse_type_header(header: &str) -> Option<(String, String)> {
     ];
     for (prefix, kind) in prefixes {
         if let Some(rest) = h.strip_prefix(prefix) {
- // Strip generic params and trailing whitespace / annotations:
- // "Foo<T>" → "Foo"
- // "Foo<T extends Bar>" → "Foo"
+            // Strip generic params and trailing whitespace / annotations:
+            // "Foo<T>" → "Foo"
+            // "Foo<T extends Bar>" → "Foo"
             let name = rest.split('<').next().unwrap_or(rest).trim();
             if !name.is_empty() {
                 return Some(((*kind).to_string(), name.to_string()));
@@ -778,11 +774,11 @@ fn derive_package(rel_path: &str) -> String {
     if parts.len() <= 1 {
         return String::new();
     }
- // Skip leading host-slug components. `fetch_many_to_cache` nests
- // pages under one or more per-host subdirectories (e.g.
- // `release.server.docs.hytale.com/com/.../X.html`), but the FQN of
- // a Java class never includes those. Heuristic: Java package
- // components never contain a `.`; host slugs always do.
+    // Skip leading host-slug components. `fetch_many_to_cache` nests
+    // pages under one or more per-host subdirectories (e.g.
+    // `release.server.docs.hytale.com/com/.../X.html`), but the FQN of
+    // a Java class never includes those. Heuristic: Java package
+    // components never contain a `.`; host slugs always do.
     let mut start = 0;
     while start < parts.len() - 1 && parts[start].contains('.') {
         start += 1;
@@ -794,9 +790,7 @@ fn derive_package(rel_path: &str) -> String {
 /// entries. Empty descriptions are dropped so callers can treat an
 /// absent key as "no aux text to inject" without checking emptiness.
 /// O(n) build; O(1) per source-chunk lookup downstream.
-pub fn build_aux_text_index(
-    entries: &[JavadocEntry],
-) -> std::collections::HashMap<String, String> {
+pub fn build_aux_text_index(entries: &[JavadocEntry]) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::with_capacity(entries.len());
     for entry in entries {
         if entry.type_description.is_empty() {
@@ -833,11 +827,7 @@ pub fn inject_aux_text(chunk: &mut crate::indexer::chunker::Chunk, javadoc: &str
 /// `module` argument scopes the fetch to one Javadoc module if the host
 /// uses module-prefixed URLs (most don't); pass `None` for the common
 /// case.
-pub async fn fetch_to_cache(
-    host: &str,
-    cache_dir: &Path,
-    module: Option<&str>,
-) -> Result<usize> {
+pub async fn fetch_to_cache(host: &str, cache_dir: &Path, module: Option<&str>) -> Result<usize> {
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating cache dir {}", cache_dir.display()))?;
 
@@ -872,8 +862,8 @@ pub async fn fetch_to_cache(
     const PROGRESS_EVERY: usize = 100;
     tracing::info!(total, "javadoc fetch starting");
     for entry in entries {
- // Skip the synthetic "AllClasses" sentinel some doclet versions
- // add at index 0 (`{p:"",l:"All Classes and Interfaces"}`).
+        // Skip the synthetic "AllClasses" sentinel some doclet versions
+        // add at index 0 (`{p:"",l:"All Classes and Interfaces"}`).
         if entry.class_name.is_empty() {
             continue;
         }
@@ -908,10 +898,7 @@ pub async fn fetch_to_cache(
             if !resp.status().is_success() {
                 tracing::warn!(%url, status = %resp.status(), "javadoc page missing; skipping");
             } else {
-                let body = resp
-                    .bytes()
-                    .await
-                    .with_context(|| format!("body {url}"))?;
+                let body = resp.bytes().await.with_context(|| format!("body {url}"))?;
                 std::fs::write(&dest, &body)
                     .with_context(|| format!("writing {}", dest.display()))?;
                 downloaded += 1;
@@ -959,11 +946,11 @@ fn parse_type_search_index(text: &str) -> Result<Vec<TypeSearchEntry>> {
     }
     let json = &text[start..=end];
 
- // The doclet emits unquoted keys (`p:"foo"`). serde_json needs them
- // quoted. Do the cheapest-possible normalization that's safe for
- // Javadoc output: quote the four known keys when they appear after
- // `{` or `,`. This is fragile against future doclet changes but
- // good enough for Java 11-21.
+    // The doclet emits unquoted keys (`p:"foo"`). serde_json needs them
+    // quoted. Do the cheapest-possible normalization that's safe for
+    // Javadoc output: quote the four known keys when they appear after
+    // `{` or `,`. This is fragile against future doclet changes but
+    // good enough for Java 11-21.
     let normalized = normalize_jsdoc_keys(json);
 
     let parsed: Vec<RawEntry> = serde_json::from_str(&normalized)
@@ -997,14 +984,17 @@ fn normalize_jsdoc_keys(s: &str) -> String {
         let b = bytes[i];
         out.push(b as char);
         if b == b'{' || b == b',' {
- // Skip whitespace after the boundary, then check for an
- // unquoted key character followed by ':'.
+            // Skip whitespace after the boundary, then check for an
+            // unquoted key character followed by ':'.
             let mut j = i + 1;
             while j < bytes.len() && bytes[j].is_ascii_whitespace() {
                 out.push(bytes[j] as char);
                 j += 1;
             }
-            if j + 1 < bytes.len() && matches!(bytes[j], b'p' | b'c' | b'l' | b'u') && bytes[j + 1] == b':' {
+            if j + 1 < bytes.len()
+                && matches!(bytes[j], b'p' | b'c' | b'l' | b'u')
+                && bytes[j + 1] == b':'
+            {
                 out.push('"');
                 out.push(bytes[j] as char);
                 out.push('"');
@@ -1125,11 +1115,11 @@ mod tests {
 
     #[test]
     fn parses_minimal_class_page() {
- // Hand-crafted minimal Javadoc-style HTML. Mirrors what the Java
- // 17+ standard doclet emits for a class with one documented
- // method; if the real doclet output drifts from this, the
- // selectors fall back to the `<main>` text dump and parsing
- // still succeeds.
+        // Hand-crafted minimal Javadoc-style HTML. Mirrors what the Java
+        // 17+ standard doclet emits for a class with one documented
+        // method; if the real doclet output drifts from this, the
+        // selectors fall back to the `<main>` text dump and parsing
+        // still succeeds.
         let html = r#"
             <html><body>
               <main>
@@ -1144,8 +1134,7 @@ mod tests {
               </main>
             </body></html>
         "#;
-        let entry =
-            parse_class_page("com/hytale/server/api/PlayerService.html", html).unwrap();
+        let entry = parse_class_page("com/hytale/server/api/PlayerService.html", html).unwrap();
         assert_eq!(entry.kind, "class");
         assert_eq!(entry.simple_name, "PlayerService");
         assert_eq!(entry.fqn, "com.hytale.server.api.PlayerService");
@@ -1156,9 +1145,9 @@ mod tests {
 
     #[test]
     fn falls_back_to_main_when_selectors_miss() {
- // No `section.description` or `section.detail` - represents an
- // older or non-standard template. Walker should still pick up
- // text from `<main>`.
+        // No `section.description` or `section.detail` - represents an
+        // older or non-standard template. Walker should still pick up
+        // text from `<main>`.
         let html = r#"
             <html><body>
               <main>
@@ -1174,12 +1163,11 @@ mod tests {
 
     #[test]
     fn parses_normalized_type_search_index() {
-        let js =
-            r#"typeSearchIndex = [{p:"com.foo",l:"All Classes"},{p:"com.foo",c:"Bar"},{p:"com.foo.baz",c:"Qux",l:"Qux"}];updateSearchResults();"#;
+        let js = r#"typeSearchIndex = [{p:"com.foo",l:"All Classes"},{p:"com.foo",c:"Bar"},{p:"com.foo.baz",c:"Qux",l:"Qux"}];updateSearchResults();"#;
         let parsed = parse_type_search_index(js).unwrap();
- // First record has empty `c`; the fetcher filters those, but
- // `parse_type_search_index` keeps them so callers can see what
- // the doclet actually emitted.
+        // First record has empty `c`; the fetcher filters those, but
+        // `parse_type_search_index` keeps them so callers can see what
+        // the doclet actually emitted.
         assert_eq!(parsed.len(), 3);
         assert_eq!(parsed[1].package, "com.foo");
         assert_eq!(parsed[1].class_name, "Bar");
@@ -1214,8 +1202,7 @@ mod tests {
               </main>
             </body></html>
         "#;
-        let entry =
-            parse_class_page("com/hytale/server/api/ItemStack.html", html).unwrap();
+        let entry = parse_class_page("com/hytale/server/api/ItemStack.html", html).unwrap();
         assert_eq!(entry.methods.len(), 2, "expected two methods, no field");
         assert_eq!(entry.methods[0].name, "setAmount");
         assert_eq!(entry.methods[0].param_simple_types, vec!["int"]);
@@ -1229,9 +1216,9 @@ mod tests {
 
     #[test]
     fn captures_return_only_method_via_notes() {
- // Mirrors the CameraShake.getAssetStore() shape: no description
- // block, only a `@return` note. Before the fix this rendered as a
- // header-only inline card; now the prose carries the return text.
+        // Mirrors the CameraShake.getAssetStore() shape: no description
+        // block, only a `@return` note. Before the fix this rendered as a
+        // header-only inline card; now the prose carries the return text.
         let html = r#"
             <html><body>
               <main>
@@ -1247,8 +1234,7 @@ mod tests {
               </main>
             </body></html>
         "#;
-        let entry =
-            parse_class_page("com/hytale/CameraShake.html", html).unwrap();
+        let entry = parse_class_page("com/hytale/CameraShake.html", html).unwrap();
         assert_eq!(entry.methods.len(), 1);
         let m = &entry.methods[0];
         assert_eq!(m.name, "getAssetStore");
@@ -1309,16 +1295,16 @@ mod tests {
 
     #[test]
     fn signature_parser_handles_generics_and_qualified_names() {
-        let (params, ret) =
-            parse_method_signature("public static <T> Optional<T> wrap(java.util.List<String> xs, int n)");
+        let (params, ret) = parse_method_signature(
+            "public static <T> Optional<T> wrap(java.util.List<String> xs, int n)",
+        );
         assert_eq!(params, vec!["List", "int"]);
         assert_eq!(ret.as_deref(), Some("Optional"));
     }
 
     #[test]
     fn signature_parser_handles_arrays_and_varargs() {
-        let (params, _) =
-            parse_method_signature("public void take(String[] arr, int... ns)");
+        let (params, _) = parse_method_signature("public void take(String[] arr, int... ns)");
         assert_eq!(params, vec!["String", "int"]);
     }
 

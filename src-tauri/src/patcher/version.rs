@@ -29,18 +29,10 @@ pub struct HytaleVersion {
     pub revision_id: Option<String>,
 }
 
-/// Read the version manifest from `install_path/Server/HytaleServer.jar`.
-#[allow(dead_code)]
-pub fn read_from_install(install_path: &Path) -> Result<HytaleVersion> {
-    let jar = install_path.join("Server").join("HytaleServer.jar");
-    read_from_jar(&jar)
-}
-
 pub fn read_from_jar(jar_path: &Path) -> Result<HytaleVersion> {
-    let file =
-        File::open(jar_path).with_context(|| format!("opening {}", jar_path.display()))?;
-    let mut archive = ZipArchive::new(file)
-        .with_context(|| format!("parsing {} as zip", jar_path.display()))?;
+    let file = File::open(jar_path).with_context(|| format!("opening {}", jar_path.display()))?;
+    let mut archive =
+        ZipArchive::new(file).with_context(|| format!("parsing {} as zip", jar_path.display()))?;
 
     let mut entry = archive
         .by_name("META-INF/MANIFEST.MF")

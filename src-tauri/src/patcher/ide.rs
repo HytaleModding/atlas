@@ -110,12 +110,7 @@ fn detect_vs_code(insiders: bool) -> Option<DetectedIde> {
             IdeId::VsCodeInsiders,
         )
     } else {
-        (
-            "code",
-            "Code.exe",
-            "Microsoft VS Code",
-            IdeId::VsCode,
-        )
+        ("code", "Code.exe", "Microsoft VS Code", IdeId::VsCode)
     };
 
     // 1) CLI on PATH (note: on Windows the `code` shim is a .cmd).

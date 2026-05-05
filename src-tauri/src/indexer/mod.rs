@@ -35,8 +35,8 @@ use serde::Serialize;
 use tantivy::collector::TopDocs;
 use tantivy::query::{BooleanQuery, Occur, Query, QueryParser, TermQuery};
 use tantivy::schema::{IndexRecordOption, Value};
-use tantivy::Term;
 use tantivy::tokenizer::TokenizerManager;
+use tantivy::Term;
 use tantivy::{Index, IndexReader, ReloadPolicy, TantivyDocument};
 
 use crate::config::Slot;
@@ -53,10 +53,7 @@ const WRITER_HEAP_BYTES: usize = 128 * 1024 * 1024;
 
 /// Directory holding the Tantivy index for one slot.
 pub fn index_dir_for(data_dir: &Path, slot: Slot) -> PathBuf {
-    data_dir
-        .join("indexes")
-        .join("tantivy")
-        .join(slot.as_str())
+    data_dir.join("indexes").join("tantivy").join(slot.as_str())
 }
 
 /// Directory holding the unpacked Hypixel Javadoc HTML tree for one
@@ -180,8 +177,7 @@ pub async fn run(
     let summarizer_for_task = summarizer_opt.clone();
     let hm_docs_for_task = hm_docs_dir.clone();
     let hypixel_docs_for_task = hypixel_docs_dir.clone();
-    let cache_for_task: Arc<dyn EmbedCache> =
-        embed_cache.unwrap_or_else(|| Arc::new(NullCache));
+    let cache_for_task: Arc<dyn EmbedCache> = embed_cache.unwrap_or_else(|| Arc::new(NullCache));
     let java_source_type_for_task = java_source_type.unwrap_or(SourceType::Source);
     let rt_handle = tokio::runtime::Handle::current();
     let docs = tokio::task::spawn_blocking(move || {
@@ -336,7 +332,12 @@ pub async fn add_section(
     lance_store
         .delete_where(&predicate)
         .await
-        .with_context(|| format!("clearing existing `{}` rows from Lance", source_type.as_str()))?;
+        .with_context(|| {
+            format!(
+                "clearing existing `{}` rows from Lance",
+                source_type.as_str()
+            )
+        })?;
 
     let sink_for_index = sink.clone();
     let index_dir_for_task = index_dir.clone();
@@ -595,9 +596,8 @@ fn build_index(
     //   2. We reuse the same entries to emit standalone `hypixel_doc`
     //      chunks after the source pass - walking the cache once.
     let javadoc_entries = match hypixel_docs_dir {
-        Some(dir) => hypixel_docs::walk_cache(dir).with_context(|| {
-            format!("walking Hypixel Javadocs at {}", dir.display())
-        })?,
+        Some(dir) => hypixel_docs::walk_cache(dir)
+            .with_context(|| format!("walking Hypixel Javadocs at {}", dir.display()))?,
         None => Vec::new(),
     };
     let aux_text_index = hypixel_docs::build_aux_text_index(&javadoc_entries);
@@ -651,9 +651,7 @@ fn build_index(
         // per-file (cheap) and the whole index build runs inside a single
         // transaction committed at the end, so this is effectively a
         // batched append.
-        if let Err(err) =
-            symbols_tx.insert_file(&file.rel_path, &chunker_out.symbols)
-        {
+        if let Err(err) = symbols_tx.insert_file(&file.rel_path, &chunker_out.symbols) {
             // Don't fail the whole index build on a symbol-insert hiccup;
             // search still works without the sidecar. Log loudly so it's
             // obvious if this becomes common.
@@ -687,17 +685,16 @@ fn build_index(
 
             if !to_summarize.is_empty() {
                 let s = s.clone();
-                let results: Vec<(usize, Result<String>)> =
-                    rt.block_on(async move {
-                        use futures_util::stream::{self, StreamExt};
-                        stream::iter(to_summarize.into_iter().map(|(i, c)| {
-                            let s = s.clone();
-                            async move { (i, s.summarize(&c).await) }
-                        }))
-                        .buffer_unordered(SUMMARIZE_CONCURRENCY)
-                        .collect::<Vec<_>>()
-                        .await
-                    });
+                let results: Vec<(usize, Result<String>)> = rt.block_on(async move {
+                    use futures_util::stream::{self, StreamExt};
+                    stream::iter(to_summarize.into_iter().map(|(i, c)| {
+                        let s = s.clone();
+                        async move { (i, s.summarize(&c).await) }
+                    }))
+                    .buffer_unordered(SUMMARIZE_CONCURRENCY)
+                    .collect::<Vec<_>>()
+                    .await
+                });
 
                 for (i, result) in results {
                     match result {
@@ -1264,7 +1261,7 @@ impl std::fmt::Display for IndexId {
 /// mod project mount through the same surface.
 #[derive(Default)]
 pub struct SearchCatalog {
-    inner: parking_lot_like::Mutex<CatalogInner>,
+    inner: std::sync::Mutex<CatalogInner>,
 }
 
 #[derive(Default)]
@@ -1276,14 +1273,14 @@ struct OpenedIndex {
     index: Index,
     reader: IndexReader,
     fields: IndexFields,
-    /// Lazily-built map of Javadoc class FQN → cached HTML path on disk.
-    /// Populated on first call to [`SearchCatalog::inline_javadocs_for_class`]
-    ///. Empty when no Javadoc cache root was provided.
+    /// Lazily-built map of Javadoc class FQN to cached HTML path on disk.
+    /// Populated on first call to [`SearchCatalog::inline_javadocs_for_class`].
+    /// Empty when no Javadoc cache root was provided.
     javadoc_fqn_to_path: std::sync::OnceLock<std::collections::HashMap<String, std::path::PathBuf>>,
     /// Per-class parsed-method cache. Hot when the user clicks through
     /// multiple hits in the same class. Stored as `(type_description,
     /// methods)` so the second-hit path doesn't re-read or re-parse HTML.
-    javadoc_methods_cache: parking_lot_like::Mutex<
+    javadoc_methods_cache: std::sync::Mutex<
         std::collections::HashMap<
             String,
             (String, Arc<Vec<crate::indexer::hypixel_docs::MethodDoc>>),
@@ -1307,16 +1304,8 @@ impl SearchCatalog {
     /// by id - used by the fetcher and Index Catalog UX
     /// where a slot alone isn't enough to name the index.
     pub fn invalidate_id(&self, id: &IndexId) {
-        let mut inner = self.inner.lock();
+        let mut inner = self.inner.lock().expect("catalog poisoned");
         inner.mounted.remove(id);
-    }
-
-    /// Enumerate the ids of currently-mounted indexes. Used by the Index
-    /// Catalog UX to render the "what's mounted" list.
-    #[allow(dead_code)]
-    pub fn mounted_ids(&self) -> Vec<IndexId> {
-        let inner = self.inner.lock();
-        inner.mounted.keys().cloned().collect()
     }
 
     fn ensure(&self, slot: Slot, index_dir: &Path) -> Result<Arc<OpenedIndex>> {
@@ -1328,7 +1317,7 @@ impl SearchCatalog {
     /// path; the catalog only caches the opened handle.
     fn ensure_id(&self, id: &IndexId, index_dir: &Path) -> Result<Arc<OpenedIndex>> {
         {
-            let inner = self.inner.lock();
+            let inner = self.inner.lock().expect("catalog poisoned");
             if let Some(opened) = inner.mounted.get(id).cloned() {
                 return Ok(opened);
             }
@@ -1350,9 +1339,9 @@ impl SearchCatalog {
             reader,
             fields,
             javadoc_fqn_to_path: std::sync::OnceLock::new(),
-            javadoc_methods_cache: parking_lot_like::Mutex::default(),
+            javadoc_methods_cache: std::sync::Mutex::default(),
         });
-        let mut inner = self.inner.lock();
+        let mut inner = self.inner.lock().expect("catalog poisoned");
         inner.mounted.insert(id.clone(), opened.clone());
         Ok(opened)
     }
@@ -1476,8 +1465,7 @@ impl SearchCatalog {
         };
 
         let st_term = Term::from_field_text(opened.fields.source_type, target);
-        let st_query: Box<dyn Query> =
-            Box::new(TermQuery::new(st_term, IndexRecordOption::Basic));
+        let st_query: Box<dyn Query> = Box::new(TermQuery::new(st_term, IndexRecordOption::Basic));
         let combined: Box<dyn Query> = Box::new(BooleanQuery::new(vec![
             (Occur::Must, parsed),
             (Occur::Must, st_query),
@@ -1523,8 +1511,7 @@ impl SearchCatalog {
         index_dir: &Path,
         cache_dir: &Path,
         class_fqn: &str,
-    ) -> Result<Option<(String, Arc<Vec<crate::indexer::hypixel_docs::MethodDoc>>)>>
-    {
+    ) -> Result<Option<(String, Arc<Vec<crate::indexer::hypixel_docs::MethodDoc>>)>> {
         let trimmed = class_fqn.trim();
         if trimmed.is_empty() {
             return Ok(None);
@@ -1550,6 +1537,7 @@ impl SearchCatalog {
         if let Some(hit) = opened
             .javadoc_methods_cache
             .lock()
+            .expect("javadoc methods cache poisoned")
             .get(trimmed)
             .cloned()
         {
@@ -1570,6 +1558,7 @@ impl SearchCatalog {
         opened
             .javadoc_methods_cache
             .lock()
+            .expect("javadoc methods cache poisoned")
             .insert(trimmed.to_string(), value.clone());
         Ok(Some(value))
     }
@@ -1601,18 +1590,17 @@ impl SearchCatalog {
             }
         }
         let mut out: Vec<SearchHit> = best_by_path.into_values().collect();
-        out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        out.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         out.truncate(limit);
         Ok(out)
     }
 }
 
-fn build_hit(
-    slot: Slot,
-    fields: &IndexFields,
-    doc: &TantivyDocument,
-    score: f32,
-) -> SearchHit {
+fn build_hit(slot: Slot, fields: &IndexFields, doc: &TantivyDocument, score: f32) -> SearchHit {
     let slot_str = slot.as_str().to_string();
     let path = doc_text(doc, fields.path).unwrap_or_default();
     let fqn = doc_text(doc, fields.fqn).unwrap_or_default();
@@ -1622,8 +1610,7 @@ fn build_hit(
     let chunk_kind = doc_text(doc, fields.chunk_kind).unwrap_or_default();
     // Defaults to "source" for indexes built before source_type was added
     // (older artifacts have no field; Tantivy returns None there).
-    let source_type =
-        doc_text(doc, fields.source_type).unwrap_or_else(|| "source".to_string());
+    let source_type = doc_text(doc, fields.source_type).unwrap_or_else(|| "source".to_string());
     let start_line = doc_u64(doc, fields.start_line);
     let end_line = doc_u64(doc, fields.end_line);
     let line_count = doc_u64(doc, fields.line_count).unwrap_or(0);
@@ -1735,24 +1722,3 @@ pub fn summarize_slot(slot: Slot, index_dir: &Path, decompile_dir: &Path) -> Slo
     }
 }
 
-// -----------------------------------------------------------------------
-// Tiny Mutex shim so we don't have to add `parking_lot`; a std::sync::Mutex
-// wrapped in a newtype keeps the call sites ergonomic.
-// -----------------------------------------------------------------------
-mod parking_lot_like {
-    use std::sync::{Mutex as StdMutex, MutexGuard};
-
-    pub struct Mutex<T>(StdMutex<T>);
-
-    impl<T: Default> Default for Mutex<T> {
-        fn default() -> Self {
-            Self(StdMutex::new(T::default()))
-        }
-    }
-
-    impl<T> Mutex<T> {
-        pub fn lock(&self) -> MutexGuard<'_, T> {
-            self.0.lock().expect("catalog poisoned")
-        }
-    }
-}

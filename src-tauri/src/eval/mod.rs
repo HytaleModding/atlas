@@ -174,7 +174,11 @@ pub async fn run_eval(
                     .expected_top_paths
                     .iter()
                     .any(|exp| actual_path_matches(actual, exp));
-                if matches { Some(i + 1) } else { None }
+                if matches {
+                    Some(i + 1)
+                } else {
+                    None
+                }
             })
         };
 
@@ -299,12 +303,17 @@ pub fn print_report(report: &EvalReport) {
         report.config.top_k, report.config.negative_max_hits
     );
     println!();
-    println!("Summary ({} queries: {} positive, {} negative)",
-        s.n_queries, s.n_positive, s.n_negative);
+    println!(
+        "Summary ({} queries: {} positive, {} negative)",
+        s.n_queries, s.n_positive, s.n_negative
+    );
     println!("  Top-1 hit rate         {:>5.1}%", s.top1_hit_rate * 100.0);
     println!("  Top-3 hit rate         {:>5.1}%", s.top3_hit_rate * 100.0);
     println!("  MRR                    {:>5.3}", s.mrr);
-    println!("  Negative pass rate     {:>5.1}%", s.negative_pass_rate * 100.0);
+    println!(
+        "  Negative pass rate     {:>5.1}%",
+        s.negative_pass_rate * 100.0
+    );
     println!("  Mean latency           {:>5.0}ms", s.mean_elapsed_ms);
     println!();
     println!("Per-query:");
@@ -345,8 +354,11 @@ pub fn print_diff(prev: &EvalReport, curr: &EvalReport) {
     println!("  Negative pass rate     {:>+6.1}%", dn * 100.0);
     println!();
 
-    let by_query_prev: std::collections::HashMap<&str, &QueryResult> =
-        prev.per_query.iter().map(|q| (q.query.as_str(), q)).collect();
+    let by_query_prev: std::collections::HashMap<&str, &QueryResult> = prev
+        .per_query
+        .iter()
+        .map(|q| (q.query.as_str(), q))
+        .collect();
 
     let mut improved: Vec<String> = Vec::new();
     let mut regressed: Vec<String> = Vec::new();

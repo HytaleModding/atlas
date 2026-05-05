@@ -90,16 +90,14 @@ pub fn run() {
     // mutation. Loud failure is the safer default - the user can
     // inspect/repair the JSON and relaunch.
     let project_registry = Arc::new(project::SharedProjectRegistry::new(
-        project::ProjectRegistry::load(&data_dir)
-            .expect("failed to load project registry"),
+        project::ProjectRegistry::load(&data_dir).expect("failed to load project registry"),
     ));
 
     // User-state persistence (pins, notes, recent files). Same loud-fail
     // posture as the project registry: a corrupt state.sqlite is the
     // user's data and silently replacing it would lose pins.
-    let state_db = Arc::new(
-        state::StateDb::open_or_create(&data_dir).expect("opening state.sqlite"),
-    );
+    let state_db =
+        Arc::new(state::StateDb::open_or_create(&data_dir).expect("opening state.sqlite"));
 
     // Reap any half-extracted index dirs left behind by a prior crash
     // before SearchCatalog gets a chance to look at them. Cheap - only

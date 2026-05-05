@@ -28,7 +28,7 @@ use arrow::array::{
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use futures_util::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
-use lancedb::{DistanceType, Connection, Table};
+use lancedb::{Connection, DistanceType, Table};
 use serde::Serialize;
 
 use crate::config::Slot;
@@ -156,8 +156,9 @@ pub fn batch_from_rows(rows: &[ChunkRow<'_>]) -> Result<RecordBatch> {
 /// Opened chunks table for one slot. Holds `Connection` alongside
 /// `Table` to keep the underlying database handle alive for the caller.
 pub struct LanceStore {
-    #[allow(dead_code)]
-    conn: Connection,
+    // `_conn` (not `conn`) because nothing reads it - it's kept solely so
+    // the LanceDB connection's Drop fires *after* the Table is dropped.
+    _conn: Connection,
     table: Table,
 }
 
@@ -192,7 +193,10 @@ impl LanceStore {
             .await
             .with_context(|| format!("creating `{TABLE_NAME}` table"))?;
 
-        Ok(Self { conn, table })
+        Ok(Self {
+            _conn: conn,
+            table,
+        })
     }
 
     /// Open an existing chunks table. Returns `Ok(None)` if the directory
@@ -220,7 +224,10 @@ impl LanceStore {
             .execute()
             .await
             .with_context(|| format!("opening `{TABLE_NAME}` table"))?;
-        Ok(Some(Self { conn, table }))
+        Ok(Some(Self {
+            _conn: conn,
+            table,
+        }))
     }
 
     pub async fn add_batch(&self, batch: RecordBatch) -> Result<()> {
@@ -291,10 +298,7 @@ impl LanceStore {
                 builder = builder.only_if(pred);
             }
         }
-        let stream = builder
-            .execute()
-            .await
-            .context("running vector search")?;
+        let stream = builder.execute().await.context("running vector search")?;
         let batches: Vec<RecordBatch> = stream
             .try_collect()
             .await
@@ -364,9 +368,10 @@ fn extract_hits(batch: &RecordBatch, out: &mut Vec<SemanticHit>) -> Result<()> {
 
     // LanceDB appends a `_distance` column on vector search results. If
     // it's missing (plain scan), fill 0.0 so the hit type stays uniform.
-    let distance: Option<&Float32Array> = schema.index_of("_distance").ok().and_then(|i| {
-        batch.column(i).as_any().downcast_ref::<Float32Array>()
-    });
+    let distance: Option<&Float32Array> = schema
+        .index_of("_distance")
+        .ok()
+        .and_then(|i| batch.column(i).as_any().downcast_ref::<Float32Array>());
 
     for row in 0..batch.num_rows() {
         out.push(SemanticHit {

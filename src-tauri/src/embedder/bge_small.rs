@@ -9,6 +9,7 @@
 //! [`BGE-small-en-v1.5`]: https://huggingface.co/BAAI/bge-small-en-v1.5
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
@@ -18,7 +19,15 @@ use ort::execution_providers::DirectMLExecutionProvider;
 use super::{Embedder, EMBEDDING_DIM};
 
 pub struct BgeSmall {
-    inner: TextEmbedding,
+    // Wrapped in a Mutex because the underlying `ort::Session` driving
+    // the DirectML execution provider is NOT safe to call concurrently
+    // from multiple threads on Windows. Per-keystroke search dispatches
+    // each query to its own `tokio::task::spawn_blocking`, so without
+    // this lock two search requests racing through `embed` can land
+    // overlapping `Session::Run` calls and crash the process with
+    // STATUS_ACCESS_VIOLATION (0xc0000005). Embedding a single query
+    // string is fast (~10-50ms on GPU), so contention is negligible.
+    inner: Mutex<TextEmbedding>,
 }
 
 impl BgeSmall {
@@ -41,14 +50,14 @@ impl BgeSmall {
             let gpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
                 .with_cache_dir(cache_dir.clone())
                 .with_show_download_progress(false)
-                .with_execution_providers(vec![
-                    DirectMLExecutionProvider::default().build(),
-                ]);
+                .with_execution_providers(vec![DirectMLExecutionProvider::default().build()]);
 
             match TextEmbedding::try_new(gpu_opts) {
                 Ok(inner) => {
                     tracing::info!("BGE-small embedder running on DirectML (GPU)");
-                    return Ok(Self { inner });
+                    return Ok(Self {
+                        inner: Mutex::new(inner),
+                    });
                 }
                 Err(gpu_err) => {
                     tracing::warn!(
@@ -64,7 +73,9 @@ impl BgeSmall {
             .with_show_download_progress(false);
         let inner = TextEmbedding::try_new(cpu_opts)
             .context("loading BGE-small-en-v1.5 via fastembed-rs (CPU fallback)")?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner: Mutex::new(inner),
+        })
     }
 }
 
@@ -82,20 +93,23 @@ impl Embedder for BgeSmall {
         // writing). We pass our whole slice in one call and let it batch
         // internally; callers that want different batching can chunk the
         // input before handing it to us.
-        let vectors = self
-            .inner
-            .embed(owned, None)
-            .context("fastembed embed failed")?;
+        // Hold the lock across the embed call. ORT/DirectML on Windows
+        // is unsafe under concurrent Session::Run; serializing here is
+        // the bug fix. See struct doc comment.
+        let vectors = {
+            let inner = self
+                .inner
+                .lock()
+                .map_err(|_| anyhow::anyhow!("embedder mutex poisoned"))?;
+            inner.embed(owned, None).context("fastembed embed failed")?
+        };
 
         // Defensive dim check. fastembed is supposed to return 384-dim
         // for BGE-small; if some future version changes the default
         // pooling and silently returns something else, fail loud.
         if let Some(first) = vectors.first() {
             if first.len() != EMBEDDING_DIM {
-                anyhow::bail!(
-                    "expected {EMBEDDING_DIM}-dim vectors, got {}",
-                    first.len()
-                );
+                anyhow::bail!("expected {EMBEDDING_DIM}-dim vectors, got {}", first.len());
             }
         }
         Ok(vectors)
@@ -157,15 +171,15 @@ mod tests {
         let e = shared();
 
         let texts = [
-            "send a chat message to the player",  // 0 - query-shaped
-            "PlayerRef.sendMessage(String msg)",  // 1 - related API
+            "send a chat message to the player",        // 0 - query-shaped
+            "PlayerRef.sendMessage(String msg)",        // 1 - related API
             "compile a regex pattern against a string", // 2 - unrelated
         ];
-        let v = e.embed_batch(&texts.iter().copied().collect::<Vec<_>>()).unwrap();
+        let v = e
+            .embed_batch(&texts.iter().copied().collect::<Vec<_>>())
+            .unwrap();
 
-        let cosine = |a: &[f32], b: &[f32]| -> f32 {
-            a.iter().zip(b).map(|(x, y)| x * y).sum()
-        };
+        let cosine = |a: &[f32], b: &[f32]| -> f32 { a.iter().zip(b).map(|(x, y)| x * y).sum() };
         let related = cosine(&v[0], &v[1]);
         let unrelated = cosine(&v[0], &v[2]);
 

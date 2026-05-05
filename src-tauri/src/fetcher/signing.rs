@@ -27,8 +27,7 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use ed25519_dalek::{
-    ed25519::signature::SignerMut, Signature, SigningKey, Verifier, VerifyingKey,
-    SECRET_KEY_LENGTH, SIGNATURE_LENGTH,
+    ed25519::signature::SignerMut, Signature, SigningKey, Verifier, VerifyingKey, SIGNATURE_LENGTH,
 };
 
 /// Length in bytes of a hex-encoded SHA256 fingerprint-of-pubkey prefix.
@@ -88,8 +87,8 @@ pub fn verify_manifest(
     let pubkey_arr: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = pubkey_bytes
         .try_into()
         .map_err(|_| anyhow!("pubkey length check passed but conversion failed"))?;
-    let verifying = VerifyingKey::from_bytes(&pubkey_arr)
-        .context("loading Ed25519 verifying key")?;
+    let verifying =
+        VerifyingKey::from_bytes(&pubkey_arr).context("loading Ed25519 verifying key")?;
     let sig_arr: [u8; SIGNATURE_LENGTH] = signature_bytes
         .try_into()
         .map_err(|_| anyhow!("signature length check passed but conversion failed"))?;
@@ -143,12 +142,6 @@ pub fn embedded_pubkey() -> Result<[u8; ed25519_dalek::PUBLIC_KEY_LENGTH]> {
     const RAW: &str = include_str!("../../signing/atlas-pubkey.hex");
     parse_pubkey_hex(RAW)
 }
-
-// `SECRET_KEY_LENGTH` is re-exported for callers that read a raw seed
-// out of an env var during `atlas-build`. Kept pub(crate) to avoid
-// leaking dalek internals out of the fetcher module.
-#[allow(dead_code)]
-pub(crate) const SECRET_KEY_LEN: usize = SECRET_KEY_LENGTH;
 
 #[cfg(test)]
 mod tests {

@@ -76,7 +76,10 @@ fn assert_property(schema: &Value, tool: &str, field: &str) {
 /// Extract `error.data.code` - the contract-level code string every
 /// error must carry. See `docs/mcp-contract.md` § Error taxonomy.
 fn contract_code(err: &rmcp::model::ErrorData) -> Option<&str> {
-    err.data.as_ref().and_then(|d| d.get("code")).and_then(Value::as_str)
+    err.data
+        .as_ref()
+        .and_then(|d| d.get("code"))
+        .and_then(Value::as_str)
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +90,13 @@ fn contract_code(err: &rmcp::model::ErrorData) -> Option<&str> {
 #[test]
 fn registers_every_contract_tool() {
     let r = router();
-    for name in ["search", "get_source", "get_doc", "get_asset", "find_symbol"] {
+    for name in [
+        "search",
+        "get_source",
+        "get_doc",
+        "get_asset",
+        "find_symbol",
+    ] {
         assert!(
             r.has_route(name),
             "contract tool `{name}` is not registered on the MCP router"
@@ -103,7 +112,13 @@ fn registers_no_extra_tools() {
         .map(|t| t.name.to_string())
         .collect();
     // `list_all` returns tools sorted by name.
-    let expected = ["find_symbol", "get_asset", "get_doc", "get_source", "search"];
+    let expected = [
+        "find_symbol",
+        "get_asset",
+        "get_doc",
+        "get_source",
+        "search",
+    ];
     assert_eq!(
         names, expected,
         "unexpected tool surface - contract drift against docs/mcp-contract.md"
@@ -229,7 +244,11 @@ async fn search_short_circuits_non_source_filters() {
         .await
         .expect("non-source filter must succeed with empty hits");
     let body = out.0;
-    assert!(body.hits.is_empty(), "expected empty hits, got {:?}", body.hits);
+    assert!(
+        body.hits.is_empty(),
+        "expected empty hits, got {:?}",
+        body.hits
+    );
     assert!(!body.partial, "partial must be false on a short-circuit");
     assert_eq!(body.query, "anything");
 }

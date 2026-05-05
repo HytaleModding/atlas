@@ -57,16 +57,10 @@ pub fn strip_for_indexing(src: &str) -> String {
 
         // Text block: """ ... """ (Java 13+). Body is blanked; newlines
         // preserved for line-number alignment.
-        if b == b'"'
-            && i + 2 < n
-            && bytes[i + 1] == b'"'
-            && bytes[i + 2] == b'"'
-        {
+        if b == b'"' && i + 2 < n && bytes[i + 1] == b'"' && bytes[i + 2] == b'"' {
             i += 3;
             // Find closing triple-quote, honouring backslash escapes.
-            while i + 2 < n
-                && !(bytes[i] == b'"' && bytes[i + 1] == b'"' && bytes[i + 2] == b'"')
-            {
+            while i + 2 < n && !(bytes[i] == b'"' && bytes[i + 1] == b'"' && bytes[i + 2] == b'"') {
                 if bytes[i] == b'\\' && i + 1 < n {
                     // Skip escape sequence (e.g. \" \\ \n).
                     i += 2;

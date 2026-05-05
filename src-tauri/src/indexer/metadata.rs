@@ -125,9 +125,7 @@ pub fn format_iso8601(ts: SystemTime) -> String {
     let hour = secs_in_day / 3600;
     let minute = (secs_in_day % 3600) / 60;
     let second = secs_in_day % 60;
-    format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z"
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
 }
 
 fn days_to_ymd(mut days: i64) -> (i64, u32, u32) {

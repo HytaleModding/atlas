@@ -154,9 +154,7 @@ fn split_identifier(ident: &str) -> Vec<(usize, usize)> {
         if i > start {
             let prev = bytes[i - 1];
             // lowercase / digit → uppercase: split before current
-            if b.is_ascii_uppercase()
-                && (prev.is_ascii_lowercase() || prev.is_ascii_digit())
-            {
+            if b.is_ascii_uppercase() && (prev.is_ascii_lowercase() || prev.is_ascii_digit()) {
                 out.push((start, i));
                 start = i;
             } else if b.is_ascii_uppercase() && prev.is_ascii_uppercase() {

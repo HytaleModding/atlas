@@ -25,7 +25,7 @@
 //! `docs/legal-spec/what-the-artifact-contains.md` for the full
 //! policy and the audit trail behind this decision.
 //!
-//! ## Pack side (`atlas-build`, )
+//! ## Pack side (`atlas-build`)
 //!
 //! The builder walks the staging directory, streams each file into the
 //! tar writer while also feeding a SHA256 hasher; at the end it writes
@@ -34,7 +34,7 @@
 //! zstd-compressed at the `zstd::stream` level pinned to what the plan
 //! specifies.
 //!
-//! ## Verify side (client, )
+//! ## Verify side (client)
 //!
 //! The client reads the manifest first, checks signature + fingerprint
 //! + schema/min-client-version compatibility, then streams the rest of
@@ -220,7 +220,9 @@ pub fn verify(archive_path: &Path) -> Result<VerifiedArtifact> {
         match rel_path.as_str() {
             MANIFEST_FILENAME => {
                 let mut buf = Vec::new();
-                entry.read_to_end(&mut buf).context("reading manifest.json")?;
+                entry
+                    .read_to_end(&mut buf)
+                    .context("reading manifest.json")?;
                 manifest_bytes = Some(buf);
             }
             SIGNATURE_FILENAME => {
@@ -268,13 +270,11 @@ pub fn verify(archive_path: &Path) -> Result<VerifiedArtifact> {
     // Cross-check: every observed payload file matches its expected
     // digest, and every digest line is backed by an observed file.
     for (rel_path, digest) in &observed {
-        let expected_digest = expected
-            .get(rel_path.as_str())
-            .ok_or_else(|| anyhow!("file `{rel_path}` present in tar but missing from SHA256SUMS"))?;
+        let expected_digest = expected.get(rel_path.as_str()).ok_or_else(|| {
+            anyhow!("file `{rel_path}` present in tar but missing from SHA256SUMS")
+        })?;
         if digest != expected_digest {
-            bail!(
-                "digest mismatch for `{rel_path}`: expected {expected_digest}, got {digest}"
-            );
+            bail!("digest mismatch for `{rel_path}`: expected {expected_digest}, got {digest}");
         }
     }
     let observed_set: std::collections::HashSet<&str> =
@@ -431,7 +431,10 @@ mod tests {
 
         let verified = verify(&out).unwrap();
         assert_eq!(verified.verified_files, 4);
-        assert_eq!(verified.manifest.sha256sums_sha256, manifest.sha256sums_sha256);
+        assert_eq!(
+            verified.manifest.sha256sums_sha256,
+            manifest.sha256sums_sha256
+        );
         assert!(verified.signature_bytes.is_empty());
     }
 

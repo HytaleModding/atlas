@@ -312,13 +312,15 @@ mod tests {
     fn extracts_class_ref_from_import() {
         let src = "package x;\nimport com.hytale.foo.Bar;\nclass T {}\n";
         let refs = run(src);
-        assert!(refs.iter().any(|r| r.kind == ApiKind::Class
-            && r.class_fqn == "com.hytale.foo.Bar"));
+        assert!(refs
+            .iter()
+            .any(|r| r.kind == ApiKind::Class && r.class_fqn == "com.hytale.foo.Bar"));
     }
 
     #[test]
     fn skips_wildcard_and_static_imports() {
-        let src = "import com.hytale.foo.*;\nimport static com.hytale.foo.Bar.MEMBER;\nclass T {}\n";
+        let src =
+            "import com.hytale.foo.*;\nimport static com.hytale.foo.Bar.MEMBER;\nclass T {}\n";
         let refs = run(src);
         assert!(refs.is_empty(), "expected no refs, got {refs:?}");
     }

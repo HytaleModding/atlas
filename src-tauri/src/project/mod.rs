@@ -123,9 +123,9 @@ struct RegistryFile {
 
 /// Tauri-managed registry handle. Loaded once at app boot, mutations
 /// re-serialize the JSON file in place. Not behind a Mutex here because
-/// the [`crate::commands`] commands wrap it in `parking_lot_like::Mutex`
-/// at the state-management layer - keep this struct itself plain so it
-/// stays cheap to clone the in-memory state for read-only views.
+/// the [`crate::commands`] commands wrap it in `std::sync::Mutex` at the
+/// state-management layer - keep this struct itself plain so it stays
+/// cheap to clone the in-memory state for read-only views.
 #[derive(Debug, Default)]
 pub struct ProjectRegistry {
     projects: Vec<RegisteredProject>,
@@ -146,8 +146,7 @@ impl ProjectRegistry {
                 data_dir: data_dir.to_path_buf(),
             });
         }
-        let bytes = fs::read(&path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let bytes = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         let file: RegistryFile = serde_json::from_slice(&bytes)
             .with_context(|| format!("parsing {}", path.display()))?;
         Ok(Self {
@@ -169,11 +168,7 @@ impl ProjectRegistry {
     /// Re-registering the same path is idempotent: returns the existing
     /// entry's id and leaves it in place. The source path is canonicalized
     /// before hashing so `./foo` and `/abs/path/foo` collapse to one entry.
-    pub fn register(
-        &mut self,
-        source_path: &Path,
-        name: Option<String>,
-    ) -> Result<ProjectId> {
+    pub fn register(&mut self, source_path: &Path, name: Option<String>) -> Result<ProjectId> {
         if !source_path.is_dir() {
             return Err(anyhow!(
                 "project path is not a directory: {}",
@@ -188,14 +183,12 @@ impl ProjectRegistry {
         let canonical = source_path
             .canonicalize()
             .with_context(|| format!("canonicalizing {}", source_path.display()))?;
-        let resolved_name = name
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| {
-                canonical
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "Untitled project".to_string())
-            });
+        let resolved_name = name.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| {
+            canonical
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Untitled project".to_string())
+        });
         self.projects.push(RegisteredProject {
             id: id.clone(),
             name: resolved_name,
@@ -270,12 +263,10 @@ impl ProjectRegistry {
         let file = RegistryFile {
             projects: self.projects.clone(),
         };
-        let json = serde_json::to_vec_pretty(&file)
-            .context("serializing project registry")?;
+        let json = serde_json::to_vec_pretty(&file).context("serializing project registry")?;
         // tmp + rename so a partial write can't leave the registry empty.
         let tmp = path.with_extension("json.tmp");
-        fs::write(&tmp, &json)
-            .with_context(|| format!("writing {}", tmp.display()))?;
+        fs::write(&tmp, &json).with_context(|| format!("writing {}", tmp.display()))?;
         fs::rename(&tmp, &path)
             .with_context(|| format!("renaming {} -> {}", tmp.display(), path.display()))?;
         Ok(())
@@ -329,7 +320,9 @@ mod tests {
         let mut reg = ProjectRegistry::load(data.path()).unwrap();
         assert!(reg.list().is_empty());
 
-        let id = reg.register(project.path(), Some("My Plugin".into())).unwrap();
+        let id = reg
+            .register(project.path(), Some("My Plugin".into()))
+            .unwrap();
         assert_eq!(reg.list().len(), 1);
         assert_eq!(reg.list()[0].name, "My Plugin");
 
