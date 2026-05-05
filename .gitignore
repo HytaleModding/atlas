@@ -72,3 +72,12 @@ secrets.toml
 /src-tauri/eval-staging/
 /src-tauri/eval-staging-v2/
 /.summary-cache/
+
+# Local helper scripts (developer machine only, not project tooling)
+/make-prerelease-index.bat
+/make-release-index.bat
+
+# Installer bundles dropped into public/guide for local smoke testing
+/public/guide/Atlas_*-setup.exe
+/public/guide/Atlas_*.msi
+/public/guide/scoped_dir*/
