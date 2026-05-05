@@ -51,7 +51,11 @@ jobs:
             target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.platform.os }}
-    timeout-minutes: 60
+    # Windows MSVC link + Tauri bundle (.msi + .exe) on a cold cargo
+    # cache can push past 60 minutes for this dep tree (lance, datafusion,
+    # tantivy, webview2). 120 leaves headroom; warm-cache builds finish
+    # in 10-15.
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
