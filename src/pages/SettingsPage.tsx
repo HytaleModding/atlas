@@ -4,9 +4,11 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  FileText,
   FolderOpen,
   Wrench,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import { useConfigStore } from "@/state/configStore";
@@ -375,6 +377,32 @@ function DeveloperSection() {
                 {savingRepo ? "Saving…" : "Save"}
               </button>
             </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border-subtle bg-bg-base p-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm text-fg-primary">Open logs folder</div>
+              <div className="mt-0.5 text-xs text-fg-muted">
+                Reveals the folder containing today's <code>atlas.log</code>.
+                Attach the most recent file when reporting an issue.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await invoke("open_logs_folder");
+                } catch (err) {
+                  // Surface the full error chain in the console; the
+                  // Settings page doesn't have a toast slot.
+                  console.error("open_logs_folder failed:", err);
+                }
+              }}
+              className="flex shrink-0 items-center gap-2 rounded-md border border-border-subtle bg-bg-elevated px-3 py-1.5 text-xs font-medium text-fg-primary hover:brightness-110"
+            >
+              <FileText size={14} strokeWidth={2.25} />
+              Open logs
+            </button>
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border-subtle bg-bg-base p-3">

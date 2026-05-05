@@ -175,7 +175,7 @@ pub struct ConfigSnapshot {
 
 #[tauri::command]
 pub fn load_config() -> Result<ConfigSnapshot, String> {
-    let cfg = config::load().map_err(|e| e.to_string())?;
+    let cfg = config::load().map_err(|e| format!("{e:#}"))?;
     Ok(ConfigSnapshot {
         config: cfg,
         default_release_candidate: config::default_release_candidate(),
@@ -187,7 +187,7 @@ pub fn load_config() -> Result<ConfigSnapshot, String> {
 
 #[tauri::command]
 pub fn save_config(config: AtlasConfig) -> Result<(), String> {
-    config::save(&config).map_err(|e| e.to_string())
+    config::save(&config).map_err(|e| format!("{e:#}"))
 }
 
 #[tauri::command]
@@ -207,7 +207,7 @@ pub struct PatcherOverview {
 
 #[tauri::command]
 pub fn patcher_overview() -> Result<PatcherOverview, String> {
-    let cfg = config::load().map_err(|e| e.to_string())?;
+    let cfg = config::load().map_err(|e| format!("{e:#}"))?;
     let data_dir = data_dir()?;
 
     let release_workspace = patcher::workspace_for(data_dir.as_path(), Slot::Release);
@@ -243,7 +243,7 @@ pub fn start_decompile(
         return Err("patcher is already running".to_string());
     }
 
-    let cfg = config::load().map_err(|e| e.to_string())?;
+    let cfg = config::load().map_err(|e| format!("{e:#}"))?;
     let install = config::configured_path(&cfg, slot)
         .ok_or_else(|| format!("no {} install configured", slot.as_str()))?;
 
@@ -311,12 +311,12 @@ pub fn patcher_status(status: State<'_, SharedStatus>) -> patcher::status::Patch
 pub fn clear_decompile(slot: Slot, catalog: State<'_, Arc<SearchCatalog>>) -> Result<(), String> {
     let data_dir = data_dir()?;
     let workspace = patcher::workspace_for(data_dir.as_path(), slot);
-    patcher::clear_slot(&workspace).map_err(|e| e.to_string())?;
+    patcher::clear_slot(&workspace).map_err(|e| format!("{e:#}"))?;
 
     let index_dir = indexer::index_dir_for(data_dir.as_path(), slot);
-    indexer::clear_slot(&index_dir).map_err(|e| e.to_string())?;
+    indexer::clear_slot(&index_dir).map_err(|e| format!("{e:#}"))?;
     let lance_dir = lance::lance_dir_for(data_dir.as_path(), slot);
-    lance::clear_slot(&lance_dir).map_err(|e| e.to_string())?;
+    lance::clear_slot(&lance_dir).map_err(|e| format!("{e:#}"))?;
     catalog.invalidate(slot);
     Ok(())
 }
@@ -330,7 +330,22 @@ pub fn open_in_ide(ide_id: String, path: PathBuf) -> Result<(), String> {
         .iter()
         .find(|i| i.id == id)
         .ok_or_else(|| format!("{} is not installed on this machine", id.display_name()))?;
-    ide::open_with(target, &path).map_err(|e| e.to_string())
+    ide::open_with(target, &path).map_err(|e| format!("{e:#}"))
+}
+
+/// Reveal `<data_dir>/logs/` in the platform file explorer, creating
+/// the directory if it doesn't exist. Done from Rust rather than from
+/// JS via `openPath` because the default `opener:` capability set
+/// permits `allow-open-url` + `allow-reveal-item-in-dir` but NOT
+/// `allow-open-path`, and Rust-side calls aren't gated by JS
+/// capabilities. Settings -> Developer -> "Open logs" wires to this so
+/// users can grab a log file without hunting through `%APPDATA%`.
+#[tauri::command]
+pub fn open_logs_folder() -> Result<(), String> {
+    let dir = crate::logs_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| format!("creating logs dir: {e:#}"))?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>)
+        .map_err(|e| format!("opening logs dir: {e:#}"))
 }
 
 // -----------------------------------------------------------------------
@@ -423,9 +438,9 @@ pub fn index_start(
 pub fn clear_index(slot: Slot, catalog: State<'_, Arc<SearchCatalog>>) -> Result<(), String> {
     let data_dir = data_dir()?;
     let index_dir = indexer::index_dir_for(data_dir.as_path(), slot);
-    indexer::clear_slot(&index_dir).map_err(|e| e.to_string())?;
+    indexer::clear_slot(&index_dir).map_err(|e| format!("{e:#}"))?;
     let lance_dir = lance::lance_dir_for(data_dir.as_path(), slot);
-    lance::clear_slot(&lance_dir).map_err(|e| e.to_string())?;
+    lance::clear_slot(&lance_dir).map_err(|e| format!("{e:#}"))?;
     catalog.invalidate(slot);
     Ok(())
 }
@@ -550,7 +565,7 @@ pub async fn search(
             hybrid_filter,
         )
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("{e:#}"))?
     } else {
         Vec::new()
     };
@@ -606,7 +621,7 @@ pub fn find_sibling(
     let catalog_arc: Arc<SearchCatalog> = (*catalog).clone();
     catalog_arc
         .find_sibling(slot, &index_dir, &fqn, &source_type)
-        .map_err(|e| e.to_string())
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// One inline Javadoc card returned by [`get_inline_javadocs`]. Maps 1:1
@@ -648,7 +663,7 @@ pub fn get_inline_javadocs(
 
     let parsed = catalog_arc
         .class_javadoc(slot, &index_dir, &cache_dir, &class_fqn)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| format!("{e:#}"))?;
     let Some((type_description, methods)) = parsed else {
         return Ok(Vec::new());
     };
@@ -1080,7 +1095,7 @@ pub struct RemoteBuildResolution {
 pub async fn index_resolve_remote(
     patchline: Slot,
 ) -> Result<Option<RemoteBuildResolution>, String> {
-    let cfg = config::load().map_err(|e| e.to_string())?;
+    let cfg = config::load().map_err(|e| format!("{e:#}"))?;
     let repo = cfg.central_repo.trim();
     if repo.is_empty() {
         return Err("no central_repo configured".to_string());
@@ -1181,7 +1196,7 @@ pub fn index_remove(
 
     // If this build is currently the active one for its patchline, clear
     // the pointer in the config so the next search falls back cleanly.
-    let mut cfg = config::load().map_err(|e| e.to_string())?;
+    let mut cfg = config::load().map_err(|e| format!("{e:#}"))?;
     let cleared = match target_slot {
         Slot::Release => {
             if cfg.active_release_build.as_deref() == Some(build_id.as_str()) {
@@ -1201,7 +1216,7 @@ pub fn index_remove(
         }
     };
     if cleared {
-        config::save(&cfg).map_err(|e| e.to_string())?;
+        config::save(&cfg).map_err(|e| format!("{e:#}"))?;
     }
 
     // Drop catalog handles before deleting from disk - Tantivy holds
@@ -1239,12 +1254,12 @@ pub fn index_set_active(patchline: Slot, build_id: String) -> Result<(), String>
         ));
     }
 
-    let mut cfg = config::load().map_err(|e| e.to_string())?;
+    let mut cfg = config::load().map_err(|e| format!("{e:#}"))?;
     match patchline {
         Slot::Release => cfg.active_release_build = Some(build_id),
         Slot::PreRelease => cfg.active_pre_release_build = Some(build_id),
     }
-    config::save(&cfg).map_err(|e| e.to_string())
+    config::save(&cfg).map_err(|e| format!("{e:#}"))
 }
 
 // --- GH Releases API decoding ------------------------------------------

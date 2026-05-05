@@ -53,15 +53,68 @@ pub fn cache_root() -> PathBuf {
 }
 
 static RUNTIME: OnceLock<Arc<tokio::runtime::Runtime>> = OnceLock::new();
+// The non-blocking file writer's guard must outlive the process for log
+// flushing to work. Stash it in a static so it never drops.
+static LOG_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
+
+/// Atlas data directory: `%APPDATA%\horizon\Atlas\data` on Windows, the
+/// platform equivalent elsewhere. Falls back to `.` only when
+/// `ProjectDirs` returns `None` (no HOME). Computed here so the logging
+/// init at the top of `run()` and the rest of the boot sequence agree
+/// on one location.
+fn resolve_data_dir() -> PathBuf {
+    directories::ProjectDirs::from("dev", "horizon", "Atlas")
+        .map(|p| p.data_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Logs directory under `<data_dir>/logs`. Exposed so the
+/// `open_logs_folder` Tauri command and any future log-rotation code
+/// agree on one path.
+pub fn logs_dir() -> PathBuf {
+    resolve_data_dir().join("logs")
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+    let data_dir = resolve_data_dir();
+
+    // Daily-rolling file log under <data_dir>/logs/atlas.log alongside
+    // the existing stdout subscriber. This is what closes the
+    // production observability hole: `windows_subsystem = "windows"`
+    // detaches the installed binary from a console, so anything we used
+    // to write to stderr (panics, tracing::error) was discarded. The
+    // file appender survives that.
+    let log_dir = data_dir.join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "atlas.log");
+    let (file_writer, log_guard) = tracing_appender::non_blocking(file_appender);
+    // Keep the writer alive for the process lifetime; if the guard
+    // drops the writer thread shuts down and subsequent log lines are
+    // silently dropped.
+    let _ = LOG_GUARD.set(log_guard);
+
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(file_writer)
+                .with_ansi(false),
         )
         .init();
+
+    // Panic hook - log the panic message + a forced backtrace before
+    // the process unwinds. `force_capture` ignores RUST_BACKTRACE so
+    // crashes in shipped builds always include a usable trace.
+    std::panic::set_hook(Box::new(|info| {
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        tracing::error!("PANIC: {info}\nBacktrace:\n{backtrace}");
+    }));
 
     let runtime = Arc::new(
         tokio::runtime::Builder::new_multi_thread()
@@ -79,9 +132,6 @@ pub fn run() {
     // over IPC and a search over MCP now hit the same cached readers.
     let catalog = Arc::new(indexer::SearchCatalog::new());
     let embedder = Arc::new(embedder::SharedEmbedder::new());
-    let data_dir = directories::ProjectDirs::from("dev", "horizon", "Atlas")
-        .map(|p| p.data_dir().to_path_buf())
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     // Project mode registry. Loaded once at boot; mutations re-serialize
     // `<data_dir>/projects.json` in place. We `expect` here on purpose:
@@ -172,6 +222,7 @@ pub fn run() {
             commands::patcher_overview,
             commands::clear_decompile,
             commands::open_in_ide,
+            commands::open_logs_folder,
             commands::index_start,
             commands::index_status,
             commands::index_overview,

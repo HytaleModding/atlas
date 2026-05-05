@@ -44,6 +44,11 @@ axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "io-util", "process"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Daily-rolling file appender so the installed Tauri binary - which has
+# `windows_subsystem = "windows"` and therefore no console - still leaves
+# a readable error trail under <atlas-data>/logs/. Without this, every
+# panic and tracing::error in production was discarded.
+tracing-appender = "0.2"
 
 # Patcher - downloads Vineflower, extracts the server JAR, decompiles to source.
 zip = "2"
