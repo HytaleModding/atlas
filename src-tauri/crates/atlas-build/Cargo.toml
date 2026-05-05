@@ -1,6 +1,6 @@
 [package]
 name = "atlas-build"
-version = "0.1.6"
+version = "0.1.7"
 description = "Atlas central index builder CLI"
 authors = ["Atlas contributors"]
 edition = "2021"
