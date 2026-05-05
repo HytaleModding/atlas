@@ -19,7 +19,7 @@ const EMPTY_CONFIG: AtlasConfig = {
   hytale_prerelease_path: null,
   first_run_skipped: false,
   active_branch: "release",
-  central_repo: "Vibe-Theory/atlastest",
+  central_repo: "HytaleModding/atlas",
   active_release_build: null,
   active_pre_release_build: null,
 };

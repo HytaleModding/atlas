@@ -344,8 +344,7 @@ function DeveloperSection() {
               </div>
               <div className="mt-0.5 text-xs text-fg-muted">
                 GitHub repo (<code>owner/name</code>) Atlas pulls
-                published reference data from. Defaults to the dev test
-                repo; flip this when HM publishes their first build.
+                published reference data from.
               </div>
             </div>
             <div className="flex gap-2">
@@ -353,7 +352,7 @@ function DeveloperSection() {
                 type="text"
                 value={repoDraft}
                 onChange={(e) => setRepoDraft(e.target.value)}
-                placeholder="Vibe-Theory/atlastest"
+                placeholder="HytaleModding/atlas"
                 spellCheck={false}
                 className="flex-1 rounded border border-border-subtle bg-bg-base px-2 py-1 font-mono text-xs text-fg-primary"
               />

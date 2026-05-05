@@ -72,11 +72,10 @@ impl Default for AtlasConfig {
     }
 }
 
-/// Default central repository for reference-data releases. Test repo while the
-/// pipeline beds in; flip to `HytaleModding/atlas` (or wherever HM hosts) for
-/// the public release.
+/// Default central repository for reference-data releases. Points at the
+/// HytaleModding org repo where index artifacts are published.
 pub fn default_central_repo() -> String {
-    "Vibe-Theory/atlastest".to_string()
+    "HytaleModding/atlas".to_string()
 }
 
 /// Result of validating a candidate Hytale install directory.

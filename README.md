@@ -14,15 +14,15 @@ Tauri gives a real native window with system integration (file pickers, OS notif
 
 ## Run it
 
-Pre-built installers live on the [Releases page](https://github.com/Vibe-Theory/atlastest/releases). Download the one for your OS and run it.
+Pre-built installers live on the [Releases page](https://github.com/HytaleModding/atlas/releases). Download the one for your OS and run it.
 
 > On Windows you may see a SmartScreen warning ("Windows protected your PC") because the build is not yet code-signed. Click **More info** then **Run anyway**. Code-signing is on the roadmap.
 
 To build from source instead:
 
 ```
-git clone https://github.com/Vibe-Theory/atlastest.git
-cd atlastest
+git clone https://github.com/HytaleModding/atlas.git
+cd atlas
 npm install
 npm run tauri dev
 ```
