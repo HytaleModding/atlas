@@ -33,7 +33,9 @@ use clap::{Parser, Subcommand};
 
 use atlas_lib::config::Slot;
 use atlas_lib::embedder::SharedEmbedder;
-use atlas_lib::fetcher::artifact::{pack, verify, FileEntry, PackRequest, VerifiedArtifact};
+use atlas_lib::fetcher::artifact::{
+    pack, validate_staging, verify, ArtifactSpec, FileEntry, PackRequest, VerifiedArtifact,
+};
 use atlas_lib::fetcher::manifest::Manifest;
 use atlas_lib::fetcher::signing::{
     embedded_pubkey, fingerprint, generate_keypair, parse_pubkey_hex, sign_manifest,
@@ -1587,6 +1589,14 @@ fn cmd_pack(
     if !staging.is_dir() {
         bail!("staging path is not a directory: {}", staging.display());
     }
+
+    // Validate against the declarative artifact spec BEFORE writing
+    // anything. Closes the producer-side completeness gap that let
+    // 0.1.5/0.1.6 ship indexes missing `tantivy/symbols.sqlite` - the
+    // old code blindly trusted whatever was in the staging tree. Any
+    // missing required entry aborts now with a list of what's missing.
+    validate_staging(&ArtifactSpec::index_default(), staging)
+        .context("staging validation before pack")?;
 
     // Walk the staging tree and enumerate file entries. Reserved names
     // (`manifest.json`, etc.) at the root must be absent - the packer

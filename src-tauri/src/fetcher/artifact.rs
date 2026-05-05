@@ -87,6 +87,118 @@ pub struct PackRequest<'a> {
     pub signature: Option<Vec<u8>>,
 }
 
+/// One required entry an artifact's staging directory must contain
+/// before pack is allowed to proceed. Used by [`validate_staging`] to
+/// enforce that every artifact ships a complete payload.
+///
+/// The variants matter because some staging entries are directories
+/// whose internal layout we don't want to police here (Tantivy and
+/// Lance change segment files between versions), while others are
+/// single files where mere existence is the only sane check (e.g.
+/// `symbols.sqlite`). Non-empty is the universal "did the upstream
+/// step actually run?" signal.
+#[derive(Debug)]
+pub enum RequiredEntry {
+    /// File at this staging-relative path must exist and be non-empty.
+    File(&'static str),
+    /// Directory at this staging-relative path must exist and contain
+    /// at least one regular file (recursively).
+    NonEmptyDir(&'static str),
+}
+
+/// Declarative spec for what an artifact's staging directory MUST
+/// contain. Closes the producer-side completeness gap that previously
+/// let `atlas-build pack` ship index artifacts with `symbols.sqlite`
+/// missing - the old code walked whatever was in the staging tree and
+/// trusted the upstream pipeline to have produced everything. Now the
+/// spec is the single source of truth.
+#[derive(Debug)]
+pub struct ArtifactSpec {
+    pub required: Vec<RequiredEntry>,
+}
+
+impl ArtifactSpec {
+    /// Spec for an `atlas-build` index artifact. Captures the three
+    /// payload roots the search/diff client expects: a Tantivy index,
+    /// a Lance vector store, and the symbols sidecar that powers
+    /// `find_symbol` and the diff tracker. Optional content (HM docs,
+    /// Hypixel javadocs) is intentionally NOT in here - those are
+    /// gated by their own pipeline flags and missing them is not an
+    /// error condition.
+    pub fn index_default() -> Self {
+        Self {
+            required: vec![
+                RequiredEntry::NonEmptyDir("tantivy"),
+                RequiredEntry::NonEmptyDir("lance"),
+                RequiredEntry::File("tantivy/symbols.sqlite"),
+            ],
+        }
+    }
+}
+
+/// Verify every required entry in `spec` is present under `staging`.
+/// Reports all missing entries in a single error - users running
+/// pipelines should see the full list of what to fix, not chase one
+/// at a time. Called from [`crate::bin`]'s pack command before [`pack`]
+/// so an incomplete staging dir aborts before any `.tar.zst` is written.
+pub fn validate_staging(spec: &ArtifactSpec, staging: &Path) -> Result<()> {
+    let mut missing: Vec<String> = Vec::new();
+    for entry in &spec.required {
+        match entry {
+            RequiredEntry::File(rel) => {
+                let p = staging.join(rel);
+                match std::fs::metadata(&p) {
+                    Ok(m) if m.is_file() && m.len() > 0 => {}
+                    Ok(m) if m.is_file() => missing.push(format!("{rel} (empty)")),
+                    Ok(_) => missing.push(format!("{rel} (not a file)")),
+                    Err(_) => missing.push(rel.to_string()),
+                }
+            }
+            RequiredEntry::NonEmptyDir(rel) => {
+                let p = staging.join(rel);
+                match std::fs::metadata(&p) {
+                    Ok(m) if m.is_dir() => {
+                        if !dir_has_any_file(&p)? {
+                            missing.push(format!("{rel}/ (empty)"));
+                        }
+                    }
+                    Ok(_) => missing.push(format!("{rel}/ (not a directory)")),
+                    Err(_) => missing.push(format!("{rel}/")),
+                }
+            }
+        }
+    }
+    if !missing.is_empty() {
+        bail!(
+            "staging dir {} is missing required artifact contents: {}",
+            staging.display(),
+            missing.join(", ")
+        );
+    }
+    Ok(())
+}
+
+/// Recursively check whether `dir` contains at least one regular file.
+/// Used by [`validate_staging`] to enforce non-empty directories
+/// without policing their internal layout.
+fn dir_has_any_file(dir: &Path) -> Result<bool> {
+    for entry in std::fs::read_dir(dir)
+        .with_context(|| format!("scanning {}", dir.display()))?
+    {
+        let entry = entry.with_context(|| format!("reading entry under {}", dir.display()))?;
+        let ft = entry
+            .file_type()
+            .with_context(|| format!("file_type for {}", entry.path().display()))?;
+        if ft.is_file() {
+            return Ok(true);
+        }
+        if ft.is_dir() && dir_has_any_file(&entry.path())? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Pack an artifact to `out_path`.
 ///
 /// Returns the finalized [`Manifest`] with `sha256sums_sha256` computed
