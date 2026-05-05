@@ -1,7 +1,7 @@
 # Production rebuild runbook
 
-End-to-end commands for cutting a fresh Atlas index artifact with all
-four V1 corpora wired in: source, HM docs, Hypixel Javadocs (release +
+End-to-end commands for cutting a fresh Atlas data artifact with the
+four corpora wired in: source, HM docs, Hypixel Javadocs (release +
 prerelease), and assets.
 
 This runbook assumes the operator already has:
@@ -13,15 +13,24 @@ This runbook assumes the operator already has:
 - An Ed25519 signing keypair (produce one with `atlas-build keygen` if
   you don't have one yet)
 
-Paths below assume Windows. Substitute forward slashes / Unix paths as
-appropriate.
+Paths below use placeholder shell variables. Set them at the top of
+your session and the rest of the runbook is copy-pasteable:
+
+- `$ATLAS` - Atlas source checkout (e.g. `~/code/atlas`)
+- `$WORK`  - scratch directory for staging + keys + the final `.tar.zst`
+  (e.g. `~/atlas-build`)
+- `$CACHE` - shared cache root for the embedder model, HM docs clone,
+  and Hypixel Javadoc mirror (e.g. `~/atlas-cache`)
+
+Forward slashes work on Windows under `bash` (Git Bash, WSL). Native
+PowerShell users substitute backslashes.
 
 ---
 
 ## 0. Build the binary
 
 ```bash
-cd D:/CodeProjects/Atlas/src-tauri
+cd $ATLAS/src-tauri
 cargo build --release --bin atlas-build
 ```
 
@@ -46,8 +55,8 @@ backoff). The cache root layout `atlas-build` expects is
 time:
 
 ```bash
-mkdir -p D:/atlas-cache/javadocs
-cd D:/atlas-cache/javadocs
+mkdir -p $CACHE/javadocs
+cd $CACHE/javadocs
 wget --mirror --no-parent --convert-links \
      --quiet --reject "*.svg,*.png,*.gif" \
      https://release.server.docs.hytale.com/
@@ -60,8 +69,8 @@ Verify each host tree contains `type-search-index.js` and at least
 one class page:
 
 ```bash
-ls D:/atlas-cache/javadocs/release.server.docs.hytale.com/type-search-index.js
-ls D:/atlas-cache/javadocs/prerelease.server.docs.hytale.com/type-search-index.js
+ls $CACHE/javadocs/release.server.docs.hytale.com/type-search-index.js
+ls $CACHE/javadocs/prerelease.server.docs.hytale.com/type-search-index.js
 ```
 
 (Skip this whole step if the `--hypixel-docs` flag is omitted in step
@@ -72,11 +81,11 @@ ls D:/atlas-cache/javadocs/prerelease.server.docs.hytale.com/type-search-index.j
 ## 2. Stage directory + signing key
 
 ```bash
-mkdir -p D:/atlas-build/staging
-mkdir -p D:/atlas-build/keys
+mkdir -p $WORK/staging
+mkdir -p $WORK/keys
 ./target/release/atlas-build.exe keygen \
-    --out-private D:/atlas-build/keys/atlas-signing.pem \
-    --out-public  D:/atlas-build/keys/atlas-pubkey.hex
+    --out-private $WORK/keys/atlas-signing.pem \
+    --out-public  $WORK/keys/atlas-pubkey.hex
 ```
 
 Note the printed fingerprint. The pubkey `.hex` should be committed as
@@ -92,11 +101,11 @@ For a release build:
 
 ```bash
 ./target/release/atlas-build.exe index \
-    --decompile     D:/CodeProjects/patcher/work/decompile/release \
-    --staging       D:/atlas-build/staging \
+    --decompile     $WORK/decompile/release \
+    --staging       $WORK/staging \
     --slot          release \
     --hm-docs-fetch \
-    --hypixel-docs  D:/atlas-cache/javadocs
+    --hypixel-docs  $CACHE/javadocs
 ```
 
 For a pre-release build, swap the slot and decompile path. The
@@ -105,15 +114,15 @@ the same `--hypixel-docs` value points at both:
 
 ```bash
 ./target/release/atlas-build.exe index \
-    --decompile     D:/CodeProjects/patcher/work/decompile/pre-release \
-    --staging       D:/atlas-build/staging \
+    --decompile     $WORK/decompile/pre-release \
+    --staging       $WORK/staging \
     --slot          pre-release \
     --hm-docs-fetch \
-    --hypixel-docs  D:/atlas-cache/javadocs
+    --hypixel-docs  $CACHE/javadocs
 ```
 
 The shared cache root (embedder model + HM docs clone + Javadoc
-mirror) defaults to `D:/atlas-cache` on Windows; override with the
+mirror) defaults to `$CACHE` on Windows; override with the
 `--cache-root <path>` flag or the `ATLAS_CACHE_ROOT` env var. The
 desktop app reads the same env/default chain when resolving HM doc
 and Javadoc files for the right-panel viewer, so keep the two in
@@ -139,10 +148,10 @@ Optional flags:
 Verify the staging tree contains everything expected:
 
 ```bash
-ls D:/atlas-build/staging/tantivy/        # segment files + atlas-meta.json
-ls D:/atlas-build/staging/tantivy/symbols.sqlite
-ls D:/atlas-build/staging/lance/          # lance manifest + data
-ls D:/atlas-build/staging | grep -v decompile  # decompile must NOT exist
+ls $WORK/staging/tantivy/        # segment files + atlas-meta.json
+ls $WORK/staging/tantivy/symbols.sqlite
+ls $WORK/staging/lance/          # lance manifest + data
+ls $WORK/staging | grep -v decompile  # decompile must NOT exist
 ```
 
 The decompile tree intentionally is not copied into staging - see
@@ -155,15 +164,15 @@ one corpus:
 ```bash
 # Source corpus
 ./target/release/atlas-build.exe search \
-    --staging D:/atlas-build/staging --query "PageManager"
+    --staging $WORK/staging --query "PageManager"
 
 # HM docs corpus (markdown body of the HM docs site)
 ./target/release/atlas-build.exe search \
-    --staging D:/atlas-build/staging --query "Hytale Modding"
+    --staging $WORK/staging --query "Hytale Modding"
 
 # Hypixel Javadoc corpus (prose only the Javadocs would carry)
 ./target/release/atlas-build.exe search \
-    --staging D:/atlas-build/staging --query "Removes the given player"
+    --staging $WORK/staging --query "Removes the given player"
 ```
 
 Each query should return at least one hit when its corpus is present.
@@ -174,9 +183,9 @@ Each query should return at least one hit when its corpus is present.
 
 ```bash
 ./target/release/atlas-build.exe pack \
-    --staging              D:/atlas-build/staging \
-    --out                  D:/atlas-build/atlas-index-release-89796e57b.tar.zst \
-    --signing-key          D:/atlas-build/keys/atlas-signing.pem \
+    --staging              $WORK/staging \
+    --out                  $WORK/atlas-index-release-89796e57b.tar.zst \
+    --signing-key          $WORK/keys/atlas-signing.pem \
     --hytale-impl-version  2026.03.26-89796e57b \
     --hytale-patchline     release \
     --build-id             release-89796e57b
@@ -197,8 +206,8 @@ against a different pubkey (e.g. before committing it to the repo):
 
 ```bash
 ./target/release/atlas-build.exe verify \
-    D:/atlas-build/atlas-index-release-89796e57b.tar.zst \
-    --pubkey D:/atlas-build/keys/atlas-pubkey.hex
+    $WORK/atlas-index-release-89796e57b.tar.zst \
+    --pubkey $WORK/keys/atlas-pubkey.hex
 ```
 
 Output should end with:
@@ -221,7 +230,7 @@ Spin up the desktop app pointed at a fresh data directory, fetch the
 artifact, mount it, and run a query:
 
 ```bash
-cd D:/CodeProjects/Atlas
+cd $ATLAS
 npm run tauri dev
 ```
 

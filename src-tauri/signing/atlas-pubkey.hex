@@ -15,6 +15,6 @@
 #   4. Ship a new Atlas client - old clients can't mount artifacts
 #      signed by the rotated key (which is the intended behavior).
 #
-# DEV KEY - paired with D:/CodeProjects/Atlas-loop-test/test-key.pem.
+# DEV KEY - paired with a local test private key kept outside the repo.
 # Replace with the real HM pubkey before shipping.
 4300ed47961370c9fd204f332cf967c3a00042443e60112aedcab64e8feae49a

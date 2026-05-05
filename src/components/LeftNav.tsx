@@ -40,15 +40,13 @@ const ITEMS: NavItem[] = [
     id: "projects",
     label: "Projects",
     icon: FolderKanban,
-    disabled: true,
-    phaseNote: "Coming soon",
+    page: "catalog",
   },
   {
     id: "tracker",
     label: "Tracker",
     icon: GitCompareArrows,
-    disabled: true,
-    phaseNote: "Coming soon",
+    page: "diff",
   },
   {
     id: "logs",
@@ -195,7 +193,7 @@ function BranchPill({
     <button
       type="button"
       onClick={onClick}
-      title={!hasData ? `No ${label} data yet — click to set up` : undefined}
+      title={!hasData ? `No ${label} data yet - click to set up` : undefined}
       className={cn(
         "flex-1 rounded px-2 py-1 transition-colors",
         selected

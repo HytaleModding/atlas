@@ -39,7 +39,7 @@ function sectionToSourceTypes(c: Section): string[] | undefined {
  * Per-branch state preservation: the top-level fields hold the *active*
  * branch's view. When the user flips branches via branchStore, we snapshot
  * the current state into `bySlot[oldSlot]` and restore from
- * `bySlot[newSlot]` so each branch behaves like its own tab — its query,
+ * `bySlot[newSlot]` so each branch behaves like its own tab - its query,
  * results, selection, viewer history, and section chip survive the flip.
  */
 type SlotSnapshot = {
@@ -344,7 +344,7 @@ export const useSearchStore = create<SearchState>()(
     }
     const restore = bySlot[newSlot] ?? emptySnapshot();
     // Bumping `lastRequestId` invalidates any in-flight `runNow` started
-    // for the prior branch — its `if (get().lastRequestId !== id) return;`
+    // for the prior branch - its `if (get().lastRequestId !== id) return;`
     // guard will drop the response instead of writing it into the new
     // branch's hit list.
     set({

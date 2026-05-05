@@ -138,7 +138,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       bySlot,
     });
     // We deliberately do NOT mirror activeId's hit back into
-    // searchStore.selectedHit here — searchStore.switchSlot already
+    // searchStore.selectedHit here - searchStore.switchSlot already
     // restored its own selectedHit, which may differ if the user used
     // Alt+← viewer history before the flip.
   },

@@ -1,16 +1,11 @@
-# Decompile Determinism - Decision Doc
-
-**Status:** locked-in for Phase 3
-**Owner:** Atlas
-**Last updated:** 2026-04-22
+# Decompile Determinism
 
 ## Why this matters
 
-Atlas ships the decompiled source tree *inside* the central-hosted index artifact
-(Phase 3.D). Users search against that shipped source and - via the diff tracker
-in Phase 5.C - resolve their own mod's API references against symbols lifted from
-it. If two CI runs decompile the same JAR to two different trees, every downstream
-invariant breaks:
+Atlas ships the decompiled source tree *inside* the central-built artifact.
+Users search against that shipped source and (later) the diff tracker resolves
+their own mod's API references against symbols lifted from it. If two CI runs
+decompile the same JAR to two different trees, every downstream invariant breaks:
 
 - Artifact hashes in `SHA256SUMS` flap between builds with no real change.
 - Line numbers in search hits (`start_line`, `end_line`, `preview_line`) drift.
@@ -30,8 +25,8 @@ an inspectable, stable output so:
 
 ## Pinned toolchain
 
-These are the exact versions the `atlas-build` CLI (Phase 3.F) and CI workflow
-will run under. Pinned in code - never read from the host environment.
+These are the exact versions the `atlas-build` CLI and CI workflow run under.
+Pinned in code, never read from the host environment.
 
 ### Vineflower
 
@@ -106,8 +101,8 @@ other non-Hypixel classes out of the decompile. See `patcher/decompile.rs:70-77`
 
 ## Version bumps
 
-Three version fields live in `IndexMetadata` (Phase 3.B) that change the
-decompile surface. Bump when:
+Three version fields live in `IndexMetadata` that change the decompile surface.
+Bump when:
 
 - `vineflower_version` - Vineflower jar version bump. Any change forces a full
   artifact rebuild; old artifacts stay mountable but the client flags them as
@@ -121,7 +116,7 @@ decompile surface. Bump when:
 
 ## Proof of determinism (acceptance criterion)
 
-Before Phase 3.F's artifact builder lands, we commit a one-off script
+Before the artifact builder ships, we commit a one-off script
 (`scripts/verify-decompile-determinism.sh`) that:
 
 1. Runs `atlas-build decompile` twice against the same input JAR in two fresh

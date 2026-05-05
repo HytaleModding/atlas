@@ -45,8 +45,8 @@ Build ids are stable and opaque to clients - format is
 
 ## Source-type discriminator
 
-Phase 3 ships with `source_type = "source"` only. Phase 4 adds
-`"hm_doc"`, `"hypixel_doc"`, `"asset"`. Clients should treat unknown
+v1 ships with `source_type = "source"`, `"hm_doc"`, and `"hypixel_doc"`.
+`"asset"` is reserved for a later release. Clients should treat unknown
 source types as opaque and pass them through untouched. Tools that
 take a `source_type` filter accept either a single value or a list.
 
@@ -190,9 +190,6 @@ inclusive range. Both must be set or neither. `end_line >= start_line`.
 Read a documentation page from the artifact. HM docs + Hypixel docs
 share this tool, dispatched by `source_type`.
 
-**Status:** tool surface live in Phase 3. Returns `SourceTypeNotIndexed`
-until Phase 4 ingestion lands.
-
 **Input:**
 ```json
 {
@@ -229,11 +226,10 @@ until Phase 4 ingestion lands.
 ### 4. `get_asset`
 
 Read a single asset from the bundled `assets.zip`. Typically JSON; may
-be binary in future phases (returned base64-encoded with a content-type
-hint).
+be binary later (returned base64-encoded with a content-type hint).
 
-**Status:** tool surface live in Phase 3. Returns `SourceTypeNotIndexed`
-until Phase 4 ingestion lands.
+**Status:** tool surface declared. Returns `SourceTypeNotIndexed` until
+asset ingestion lands.
 
 **Input:**
 ```json
@@ -271,7 +267,7 @@ until Phase 4 ingestion lands.
 
 Resolve a symbol (class, method, field) by fully-qualified name or
 fuzzy signature match. Powered by `symbols.sqlite` FTS5. Used by the
-Phase 5 diff tracker; available standalone so agents can answer
+diff tracker; available standalone so agents can answer
 "where is `HytaleServer.SCHEDULED_EXECUTOR` defined?" without
 round-tripping through `search`.
 
@@ -339,7 +335,7 @@ on `code`.
 | `IndexNotMounted`            | No artifact is mounted. Desktop: user hasn't fetched one yet. Serve: catalog is empty.              | No        |
 | `ArtifactVersionMismatch`    | Explicit `build_id` is not mounted.                                                                 | No        |
 | `SourceNotFound`             | `path` is not in the artifact.                                                                      | No        |
-| `SourceTypeNotIndexed`       | Artifact doesn't include that source type (e.g., Phase-3 artifacts return this for `hm_doc`).      | No        |
+| `SourceTypeNotIndexed`       | Artifact doesn't include that source type.                                                          | No        |
 | `SymbolNotFound`             | `find_symbol` with `fqn` got no exact match; with `signature` got no FTS5 hit above threshold.      | No        |
 | `InvalidQuery`               | Query is syntactically broken (empty, exceeds max length, malformed filter).                        | No        |
 | `RateLimited`                | Hosted only. Includes `retry_after_seconds` in `error.data`.                                        | Yes       |
@@ -368,7 +364,7 @@ routing. Revisit in 2.0 if we see repeated requests.
 
 ## Contract compliance
 
-`src-tauri/tests/mcp_contract.rs` (Phase 3.I.3) validates every tool's
-actual input/output against the JSON Schemas in this document. The
-same suite runs against `atlas-serve` when that lands - divergence
-between local and hosted is a test failure, not a documentation bug.
+`src-tauri/tests/mcp_contract.rs` validates every tool's actual
+input/output against the JSON Schemas in this document. The same suite
+runs against `atlas-serve` when that lands - divergence between local
+and hosted is a test failure, not a documentation bug.

@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use ort::execution_providers::DirectMLExecutionProvider;
 
 use super::{Embedder, EMBEDDING_DIM};
 
@@ -28,16 +29,36 @@ impl BgeSmall {
         std::fs::create_dir_all(&cache_dir)
             .with_context(|| format!("creating model cache {}", cache_dir.display()))?;
 
-        let opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
-            .with_cache_dir(cache_dir)
-            // We emit our own index:* / embed:* events to the UI; fastembed's
-            // stdout progress bar would just be noise in the Tauri log.
-            .with_show_download_progress(false);
+        // Try DirectML (GPU) first; fall back to CPU if it fails to
+        // initialize. DirectML is Windows-native and ships with the OS,
+        // so on a Windows machine with any DX12 GPU it should always
+        // succeed. CPU fallback exists so non-Windows or headless builds
+        // still index, just slowly.
+        let gpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
+            .with_cache_dir(cache_dir.clone())
+            .with_show_download_progress(false)
+            .with_execution_providers(vec![
+                DirectMLExecutionProvider::default().build(),
+            ]);
 
-        let inner = TextEmbedding::try_new(opts)
-            .context("loading BGE-small-en-v1.5 via fastembed-rs")?;
-
-        Ok(Self { inner })
+        match TextEmbedding::try_new(gpu_opts) {
+            Ok(inner) => {
+                tracing::info!("BGE-small embedder running on DirectML (GPU)");
+                Ok(Self { inner })
+            }
+            Err(gpu_err) => {
+                tracing::warn!(
+                    error = %gpu_err,
+                    "DirectML init failed, falling back to CPU embedder"
+                );
+                let cpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
+                    .with_cache_dir(cache_dir)
+                    .with_show_download_progress(false);
+                let inner = TextEmbedding::try_new(cpu_opts)
+                    .context("loading BGE-small-en-v1.5 via fastembed-rs (CPU fallback)")?;
+                Ok(Self { inner })
+            }
+        }
     }
 }
 

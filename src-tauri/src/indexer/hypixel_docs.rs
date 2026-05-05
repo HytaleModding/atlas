@@ -860,8 +860,17 @@ pub async fn fetch_to_cache(
         .with_context(|| format!("body {index_url}"))?;
 
     let entries = parse_type_search_index(&index_text)?;
+    let total = entries.len();
     let mut downloaded = 0usize;
+    let mut cache_hits = 0usize;
+    let mut processed = 0usize;
     let mut seen: HashSet<String> = HashSet::new();
+    // Emit a progress line every PROGRESS_EVERY entries seen so the
+    // terminal isn't a black hole during the cold-cache first-run case
+    // (~6000 pages, ~10 minutes). The fetcher previously logged only on
+    // 404s, so a healthy run looked indistinguishable from a hang.
+    const PROGRESS_EVERY: usize = 100;
+    tracing::info!(total, "javadoc fetch starting");
     for entry in entries {
  // Skip the synthetic "AllClasses" sentinel some doclet versions
  // add at index 0 (`{p:"",l:"All Classes and Interfaces"}`).
@@ -881,32 +890,50 @@ pub async fn fetch_to_cache(
         if !seen.insert(rel.clone()) {
             continue;
         }
+        processed += 1;
         let dest = cache_dir.join(&rel);
         if dest.is_file() {
-            continue;
+            cache_hits += 1;
+        } else {
+            if let Some(parent) = dest.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
+            }
+            let url = format!("{host}/{rel}");
+            let resp = client
+                .get(&url)
+                .send()
+                .await
+                .with_context(|| format!("GET {url}"))?;
+            if !resp.status().is_success() {
+                tracing::warn!(%url, status = %resp.status(), "javadoc page missing; skipping");
+            } else {
+                let body = resp
+                    .bytes()
+                    .await
+                    .with_context(|| format!("body {url}"))?;
+                std::fs::write(&dest, &body)
+                    .with_context(|| format!("writing {}", dest.display()))?;
+                downloaded += 1;
+            }
         }
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
+        if processed % PROGRESS_EVERY == 0 {
+            tracing::info!(
+                processed,
+                total,
+                downloaded,
+                cache_hits,
+                "javadoc fetch progress"
+            );
         }
-        let url = format!("{host}/{rel}");
-        let resp = client
-            .get(&url)
-            .send()
-            .await
-            .with_context(|| format!("GET {url}"))?;
-        if !resp.status().is_success() {
-            tracing::warn!(%url, status = %resp.status(), "javadoc page missing; skipping");
-            continue;
-        }
-        let body = resp
-            .bytes()
-            .await
-            .with_context(|| format!("body {url}"))?;
-        std::fs::write(&dest, &body)
-            .with_context(|| format!("writing {}", dest.display()))?;
-        downloaded += 1;
     }
+    tracing::info!(
+        processed,
+        total,
+        downloaded,
+        cache_hits,
+        "javadoc fetch complete"
+    );
     Ok(downloaded)
 }
 
