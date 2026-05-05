@@ -4,6 +4,7 @@ import { FolderOpen, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { validateHytalePath, type HytalePathCheck } from "@/lib/config";
 import { useConfigStore } from "@/state/configStore";
+import { useOverviewStore } from "@/state/overviewStore";
 
 /** First-run modal per ui-spec.md § First-Run Modal.
  *  Blocks the app until the user either:
@@ -61,6 +62,11 @@ export function FirstRunModal() {
     setSaving(true);
     try {
       await update({ hytale_release_path: path });
+      // Saving the path flips `overview.configured` on the backend, but the
+      // overview store caches the previous snapshot. Without an explicit
+      // refresh, BranchCard keeps rendering "Choose install" until the next
+      // window-focus poll. Match the pattern in BranchCard.pickInstall.
+      await useOverviewStore.getState().refresh();
     } finally {
       setSaving(false);
     }
