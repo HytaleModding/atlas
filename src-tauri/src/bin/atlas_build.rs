@@ -204,9 +204,20 @@ enum Command {
  /// `ATLAS_CACHE_ROOT` env var if set, otherwise the platform
  /// cache dir resolved by `directories::ProjectDirs`.
  /// Subdirectories used: `models/`, `hm-docs/site/`,
- /// `javadocs/<host-slug>/`.
+ /// `javadocs/<host-slug>/` (or `javadocs/<jar-version>/<host-slug>/`
+ /// when `--hytale-version` is set).
         #[arg(long)]
         cache_root: Option<PathBuf>,
+
+ /// Hytale JAR version (e.g. `2026.04.30-b4f6a911e`). When set,
+ /// the auto-fetched Hypixel Javadoc cache is scoped to a
+ /// per-version subdirectory so a new pre-release JAR forces a
+ /// fresh fetch instead of silently reusing last-week's cached
+ /// HTML at the same URL. The pipeline subcommand always passes
+ /// this through; standalone `index` calls can omit it for
+ /// backwards-compat with the old flat cache layout.
+        #[arg(long)]
+        hytale_version: Option<String>,
 
  /// Optional content-addressed embedding cache. When set, chunk
  /// texts hashed to a key already on disk skip BGE-small entirely;
@@ -417,6 +428,77 @@ enum Command {
         top_k: usize,
     },
 
+ /// One-click producer pipeline: locate the active server JAR for a
+ /// slot, read its `Implementation-Version`, decompile (skip if a tree
+ /// already exists for that exact version), then index into a
+ /// per-version output directory. Output layout never overwrites prior
+ /// versions, so release/pre-release indexes accumulate side-by-side
+ /// for diffing later. Intended to be wrapped by a one-line `.bat`
+ /// per slot so a producer just double-clicks to refresh that slot.
+    Pipeline {
+ /// Slot to build. Determines which Hytale install dir to read from
+ /// and the patchline label baked into the index.
+        #[arg(long)]
+        slot: String,
+
+ /// Override path to the server JAR. Defaults to the launcher's
+ /// `<install-root>/<slot>/package/game/latest/Server/HytaleServer.jar`.
+        #[arg(long)]
+        jar: Option<PathBuf>,
+
+ /// Hytale launcher install root. Resolved JAR path is
+ /// `<install-root>/<slot>/package/game/latest/Server/HytaleServer.jar`.
+ /// When omitted, defaults to `<config-dir>/Hytale/install` resolved
+ /// via `directories::BaseDirs` (`%APPDATA%\Hytale\install` on
+ /// Windows, `~/Library/Application Support/Hytale/install` on macOS,
+ /// `$XDG_CONFIG_HOME/Hytale/install` on Linux).
+        #[arg(long)]
+        install_root: Option<PathBuf>,
+
+ /// Workspace root for decompile + published index trees. Defaults
+ /// to `<data-dir>/pipeline/`.
+        #[arg(long)]
+        workspace: Option<PathBuf>,
+
+ /// Skip the "rebuild?" prompt when the version already has an index;
+ /// implies "yes, rebuild into a fresh sibling directory".
+        #[arg(long)]
+        rebuild: bool,
+
+ /// Skip the "rebuild?" prompt and exit without rebuilding when the
+ /// version already has an index. Mutually exclusive with `--rebuild`.
+        #[arg(long)]
+        skip_if_exists: bool,
+
+ /// Optional shared cache root for the embedder model + Javadoc
+ /// mirror. See `cmd_index` for resolution order.
+        #[arg(long)]
+        cache_root: Option<PathBuf>,
+
+ /// Optional embedding cache for cross-slot reuse.
+        #[arg(long)]
+        embedding_cache: Option<PathBuf>,
+
+ /// Path to a pkcs8 PEM signing key. When set, the pipeline runs
+ /// `pack` after indexing and writes a signed `.tar.zst` artifact to
+ /// `<workspace>/published-artifacts/<slot>/<version>.tar.zst`.
+ /// When omitted, the pipeline still produces the artifact but
+ /// emits it unsigned (the embedded client pubkey will refuse to
+ /// load unsigned artifacts; unsigned mode is for local repro
+ /// only). Falls back to the `ATLAS_SIGNING_KEY` env var when the
+ /// flag is not given but the env var is set.
+        #[arg(long)]
+        signing_key: Option<PathBuf>,
+
+ /// Skip the pack step entirely. Useful for fast iteration when
+ /// only the on-disk index dir is needed and the artifact tarball
+ /// isn't. The index dir at
+ /// `<workspace>/published-indexes/<slot>/<version>/` is still
+ /// produced regardless.
+        #[arg(long)]
+        no_pack: bool,
+    },
+
  /// Verify an artifact's layout, digests, and (if a pubkey is given)
  /// signature. Exits non-zero on any verification failure. Pubkey
  /// defaults to the pubkey embedded in this binary; pass
@@ -484,6 +566,7 @@ fn main() -> Result<()> {
             hypixel_docs,
             no_hypixel_docs,
             cache_root,
+            hytale_version,
             embedding_cache,
         } => cmd_index(
             &decompile,
@@ -497,6 +580,7 @@ fn main() -> Result<()> {
             hypixel_docs.as_deref(),
             no_hypixel_docs,
             cache_root.as_deref(),
+            hytale_version.as_deref(),
             embedding_cache.as_deref(),
         ),
         Command::AddSection {
@@ -562,6 +646,29 @@ fn main() -> Result<()> {
             &slot,
             top_k,
         ),
+        Command::Pipeline {
+            slot,
+            jar,
+            install_root,
+            workspace,
+            rebuild,
+            skip_if_exists,
+            cache_root,
+            embedding_cache,
+            signing_key,
+            no_pack,
+        } => cmd_pipeline(
+            &slot,
+            jar.as_deref(),
+            install_root.as_deref(),
+            workspace.as_deref(),
+            rebuild,
+            skip_if_exists,
+            cache_root.as_deref(),
+            embedding_cache.as_deref(),
+            signing_key.as_deref(),
+            no_pack,
+        ),
         Command::Verify {
             artifact,
             pubkey,
@@ -597,6 +704,7 @@ impl ProgressSink for StdoutSink {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn cmd_index(
     decompile: &Path,
     staging: &Path,
@@ -609,6 +717,7 @@ fn cmd_index(
     hypixel_docs: Option<&Path>,
     no_hypixel_docs: bool,
     cache_root: Option<&Path>,
+    hytale_version: Option<&str>,
     embedding_cache: Option<&Path>,
 ) -> Result<()> {
     if !decompile.is_dir() {
@@ -715,7 +824,22 @@ fn cmd_index(
             Slot::Release => "https://release.server.docs.hytale.com",
             Slot::PreRelease => "https://prerelease.server.docs.hytale.com",
         };
-        let cache_root = resolved_cache_root.join("javadocs");
+        // Cache layout:
+        //   - default (no --hytale-version): `<cache>/javadocs/<host-slug>/`
+        //     (legacy flat layout, kept for back-compat with standalone runs).
+        //   - with --hytale-version: `<cache>/javadocs/<jar-version>/<host-slug>/`
+        //     so a new JAR version forces a fresh fetch instead of silently
+        //     reusing last-week's cached HTML at the same URL. The fetcher's
+        //     only freshness check is "file exists on disk", so without the
+        //     version-scoped path a pre-release rebuild against an updated
+        //     Hytale build would embed last-week's docs into this-week's
+        //     index. The pipeline subcommand always passes --hytale-version.
+        let cache_root = match hytale_version {
+            Some(v) if !v.is_empty() => resolved_cache_root
+                .join("javadocs")
+                .join(sanitize_version_tag(v)),
+            _ => resolved_cache_root.join("javadocs"),
+        };
         fs::create_dir_all(&cache_root)
             .with_context(|| format!("creating hypixel cache {}", cache_root.display()))?;
         let results = rt
@@ -1056,7 +1180,7 @@ fn cmd_decompile(
     let jar_owned = jar.to_path_buf();
     let classes_for_extract = classes_owned.clone();
     // Wrap in an async block so `spawn_blocking` is invoked from
-    // inside the tokio runtime context — calling it as a bare argument
+    // inside the tokio runtime context - calling it as a bare argument
     // to `block_on` panics with "no reactor running" because the
     // arguments evaluate before `block_on` enters the runtime.
     let extracted = rt
@@ -1099,6 +1223,297 @@ fn cmd_decompile(
 
     println!("decompile ready at {}", out.display());
     Ok(())
+}
+
+/// One-click producer pipeline for a slot: locate the on-disk JAR,
+/// read its version, decompile (skipping the work if a complete
+/// decompile already exists for that exact version), and run the
+/// indexer into a versioned output directory. Output paths never
+/// overwrite a prior version's tree, so successive builds accumulate
+/// for diffing.
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
+fn cmd_pipeline(
+    slot_label: &str,
+    jar_override: Option<&Path>,
+    install_root: Option<&Path>,
+    workspace: Option<&Path>,
+    rebuild: bool,
+    skip_if_exists: bool,
+    cache_root: Option<&Path>,
+    embedding_cache: Option<&Path>,
+    signing_key: Option<&Path>,
+    no_pack: bool,
+) -> Result<()> {
+    use atlas_lib::patcher::version;
+
+    if rebuild && skip_if_exists {
+        bail!("--rebuild and --skip-if-exists are mutually exclusive");
+    }
+
+    let slot_norm = match slot_label {
+        "release" => "release",
+        "pre-release" | "prerelease" => "pre-release",
+        other => bail!("unknown slot {other:?}; expected 'release' or 'pre-release'"),
+    };
+
+ // 1. Locate the JAR.
+    let jar_path: PathBuf = match jar_override {
+        Some(p) => p.to_path_buf(),
+        None => {
+            let root = match install_root {
+                Some(p) => p.to_path_buf(),
+                None => directories::BaseDirs::new()
+                    .map(|d| d.config_dir().join("Hytale").join("install"))
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "could not resolve a config dir for the Hytale launcher; \
+                             pass --install-root or --jar explicitly"
+                        )
+                    })?,
+            };
+            root.join(slot_norm)
+                .join("package")
+                .join("game")
+                .join("latest")
+                .join("Server")
+                .join("HytaleServer.jar")
+        }
+    };
+    if !jar_path.is_file() {
+        bail!(
+            "server JAR not found at {} (override with --jar)",
+            jar_path.display()
+        );
+    }
+
+ // 2. Read the version.
+    let hytale = version::read_from_jar(&jar_path)
+        .with_context(|| format!("reading version from {}", jar_path.display()))?;
+    let version_tag = sanitize_version_tag(&hytale.implementation_version);
+    println!("=== atlas-build pipeline ===");
+    println!("slot:             {slot_norm}");
+    println!("jar:              {}", jar_path.display());
+    println!("hytale version:   {}", hytale.implementation_version);
+    if let Some(p) = &hytale.patchline {
+        if p != slot_norm {
+            println!(
+                "WARNING: JAR patchline {p:?} does not match --slot {slot_norm:?}"
+            );
+        }
+    }
+
+ // 3. Resolve workspace + paths.
+    let workspace_path: PathBuf = match workspace {
+        Some(p) => p.to_path_buf(),
+        None => std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("pipeline-workspace"),
+    };
+    fs::create_dir_all(&workspace_path)
+        .with_context(|| format!("creating workspace {}", workspace_path.display()))?;
+
+    let decompile_dir = workspace_path
+        .join("decompile")
+        .join(slot_norm)
+        .join(&version_tag);
+    let published_root = workspace_path
+        .join("published-indexes")
+        .join(slot_norm);
+    let target_index_dir = pick_versioned_output_dir(
+        &published_root,
+        &version_tag,
+        rebuild,
+        skip_if_exists,
+    )?;
+    let Some(target_index_dir) = target_index_dir else {
+ // skip_if_exists hit a pre-existing dir; nothing to do.
+        println!(
+            "index already exists at {} (--skip-if-exists set); nothing to do.",
+            published_root.join(&version_tag).display()
+        );
+        return Ok(());
+    };
+
+    println!("workspace:        {}", workspace_path.display());
+    println!("decompile target: {}", decompile_dir.display());
+    println!("index target:     {}", target_index_dir.display());
+
+ // 4. Decompile (or skip if a complete tree already exists).
+    let meta_path = decompile_dir.join("atlas-decompile-meta.json");
+    if meta_path.is_file() {
+        println!(
+            "decompile reused (existing tree at {})",
+            decompile_dir.display()
+        );
+    } else {
+        if decompile_dir.exists() {
+            println!(
+                "decompile dir exists but no atlas-decompile-meta.json; wiping for clean rebuild"
+            );
+            fs::remove_dir_all(&decompile_dir)
+                .with_context(|| format!("removing stale {}", decompile_dir.display()))?;
+        }
+        cmd_decompile(&jar_path, &decompile_dir, None, cache_root)?;
+    }
+
+ // 5. Index into the chosen target dir.
+    cmd_index(
+        &decompile_dir,
+        &target_index_dir,
+        slot_norm,
+        false, // summarize
+        None,  // summarize_model
+        None,  // summarize_cache
+        None,  // hm_docs (auto-fetch off for pipeline; HM-docs handled separately)
+        false, // hm_docs_fetch
+        None,  // hypixel_docs (auto-fetch from default host)
+        false, // no_hypixel_docs (default-on)
+        cache_root,
+        Some(hytale.implementation_version.as_str()), // hytale_version: scopes javadoc cache per-version
+        embedding_cache,
+    )?;
+
+ // 6. Pack (signed `.tar.zst` artifact). Skipped when --no-pack.
+ // The index dir on disk is the producer's local working tree;
+ // the artifact is the only thing that should ever leave this
+ // machine. Per the locked architecture, only the artifact is
+ // distributable - it carries the manifest + signature the
+ // client uses to verify integrity, and the index dir alone has
+ // neither.
+    let artifact_path: Option<PathBuf> = if no_pack {
+        println!("pack: skipped (--no-pack)");
+        None
+    } else {
+        let resolved_signing_key: Option<PathBuf> = signing_key
+            .map(|p| p.to_path_buf())
+            .or_else(|| std::env::var_os("ATLAS_SIGNING_KEY").map(PathBuf::from));
+        if resolved_signing_key.is_none() {
+            println!(
+                "pack: WARNING - no --signing-key or ATLAS_SIGNING_KEY; emitting UNSIGNED artifact \
+                 (clients with the embedded pubkey will refuse to load it)"
+            );
+        }
+        let artifacts_dir = workspace_path
+            .join("published-artifacts")
+            .join(slot_norm);
+        fs::create_dir_all(&artifacts_dir).with_context(|| {
+            format!("creating artifacts dir {}", artifacts_dir.display())
+        })?;
+        // Artifact filename mirrors the index dir name so a `-rebuild-N`
+        // sibling produces a `-rebuild-N.tar.zst` and never clobbers the
+        // canonical version artifact.
+        let target_dir_name = target_index_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(version_tag.as_str())
+            .to_string();
+        let artifact_path = artifacts_dir.join(format!("{target_dir_name}.tar.zst"));
+        // build_id format: `<slot>-<version-tag-or-rebuild>`. Keeping the
+        // rebuild suffix in the build_id means the client's catalog can
+        // host two builds of the same Hytale version side-by-side without
+        // a key collision.
+        let build_id = format!("{slot_norm}-{target_dir_name}");
+        println!();
+        println!("phase: pack");
+        println!("artifact:         {}", artifact_path.display());
+        println!("build_id:         {build_id}");
+        cmd_pack(
+            &target_index_dir,
+            &artifact_path,
+            resolved_signing_key.as_deref(),
+            &hytale.implementation_version,
+            Some(slot_norm),
+            &build_id,
+        )?;
+        Some(artifact_path)
+    };
+
+    println!();
+    println!("=== pipeline complete ===");
+    println!("slot:             {slot_norm}");
+    println!("hytale version:   {}", hytale.implementation_version);
+    println!("index written to: {}", target_index_dir.display());
+    if let Some(p) = artifact_path {
+        println!("artifact:         {}", p.display());
+    }
+
+    Ok(())
+}
+
+/// Replace path-unsafe characters in a version string. Hytale's
+/// `Implementation-Version` is dotted + dashed (e.g.
+/// `2026.03.26-89796e57b`) which is fine on every filesystem we care
+/// about, but normalize defensively in case future versions add `:` or
+/// `/` (Windows forbids both in filenames).
+fn sanitize_version_tag(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            other => other,
+        })
+        .collect()
+}
+
+/// Decide where to write a new index. If no prior dir for this version
+/// exists, returns `<root>/<version>`. If one exists:
+///   - `--skip-if-exists`: returns `Ok(None)` (caller should exit OK).
+///   - `--rebuild`: returns `<root>/<version>-rebuild-N` (next free N).
+///   - neither flag: prompts y/N on stdin; same behavior as the matching
+///     flag based on the answer.
+fn pick_versioned_output_dir(
+    root: &Path,
+    version_tag: &str,
+    rebuild: bool,
+    skip_if_exists: bool,
+) -> Result<Option<PathBuf>> {
+    fs::create_dir_all(root)
+        .with_context(|| format!("creating {}", root.display()))?;
+    let primary = root.join(version_tag);
+    if !primary.exists() {
+        return Ok(Some(primary));
+    }
+
+    let do_rebuild = if rebuild {
+        true
+    } else if skip_if_exists {
+        false
+    } else {
+        prompt_yes_no(&format!(
+            "An index for {version_tag} already exists at {}.\n\
+             Rebuild into a fresh sibling directory? [y/N]: ",
+            primary.display()
+        ))?
+    };
+
+    if !do_rebuild {
+        return Ok(None);
+    }
+
+ // Find the next free `<version>-rebuild-N`.
+    for n in 1..=999 {
+        let candidate = root.join(format!("{version_tag}-rebuild-{n}"));
+        if !candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+    bail!(
+        "could not find a free rebuild slot under {} after 999 attempts",
+        root.display()
+    );
+}
+
+/// Read a y/N answer from stdin. Empty / non-yes answers default to `false`.
+fn prompt_yes_no(prompt: &str) -> Result<bool> {
+    use std::io::{self, Write};
+    print!("{prompt}");
+    io::stdout().flush().ok();
+    let mut buf = String::new();
+    io::stdin()
+        .read_line(&mut buf)
+        .context("reading y/N answer from stdin")?;
+    let trimmed = buf.trim().to_lowercase();
+    Ok(matches!(trimmed.as_str(), "y" | "yes"))
 }
 
 /// Shallow-clone the HM docs repo into the shared cache root,

@@ -157,11 +157,25 @@ function makeLru<T>(capacity: number) {
     drop(key: string) {
       map.delete(key);
     },
+    clear() {
+      map.clear();
+    },
   };
 }
 
 const sourceCache = makeLru<string>(24);
 const inlineJavadocCache = makeLru<InlineJavadoc[]>(48);
+
+/** Drop every cached source body and inline-Javadoc list. Called after
+ *  a fetch completes: a re-mount can change the on-disk Javadoc cache
+ *  out from under us, and a previously-cached `[]` result (recorded
+ *  before the new mount populated `<indexes>/javadocs/<slot>/`) would
+ *  otherwise stick forever for that (slot, fqn). The caches are small
+ *  and session-scoped; rebuilding them is cheap. */
+export function clearViewerCaches(): void {
+  sourceCache.clear();
+  inlineJavadocCache.clear();
+}
 
 /** Cached form of {@link readSource}. Used by the file viewer and by
  *  the j/k prefetch helper; both share the same in-flight promise so a

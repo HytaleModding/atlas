@@ -16,6 +16,7 @@ import {
   type RemoteBuildResolution,
 } from "@/lib/fetcher";
 import type { Slot } from "@/lib/patcher";
+import { clearViewerCaches } from "@/lib/indexer";
 import { useIndexStore } from "@/state/indexStore";
 import { useConfigStore } from "@/state/configStore";
 
@@ -266,6 +267,12 @@ export const useFetchStore = create<FetchState>((set, get) => ({
             activeBuildId: null,
             progress: { ...idleProgress },
           });
+          // The on-disk source + Javadoc cache for the just-mounted slot
+          // has changed. Drop the in-memory LRU caches so a previously
+          // cached empty Javadoc list (recorded before the mount
+          // populated `<indexes>/javadocs/<slot>/`) doesn't shadow the
+          // freshly-extracted HTML.
+          clearViewerCaches();
           void get().refreshCatalog();
           // The fetcher just wrote `<indexes>/{tantivy,lance}/<slot>/`
           // and an `atlas-meta.json`. Re-pull the index overview so

@@ -62,7 +62,7 @@ export function InstallPrereleaseGuide({ onClose }: { onClose: () => void }) {
           </div>
           <p className="text-xs text-fg-muted">
             Once Hytale finishes installing the pre-release, come back here
-            and click <em>Pick folder</em> — or just relaunch Atlas and it
+            and click <em>Pick folder</em> - or just relaunch Atlas and it
             will detect it automatically.
           </p>
         </div>

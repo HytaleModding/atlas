@@ -68,6 +68,15 @@ tree-sitter-java = "0.21"
 # fallbacks).
 fastembed = "4"
 
+# ort (ONNX Runtime) is a transitive dep of fastembed but pulled in
+# directly here to enable the DirectML execution provider on Windows.
+# DirectML is the Windows-native GPU path: ships with the OS, runs on
+# any DX12 GPU (NVIDIA, AMD, Intel iGPU), and yields ~30-50x CPU
+# throughput on BGE-small without requiring a separate CUDA Toolkit
+# install. Version pin must match fastembed 4.9's transitive ort pin
+# so we don't end up with two ort copies.
+ort = { version = "=2.0.0-rc.9", features = ["directml"] }
+
 # Vector store - LanceDB holds one row per chunk with the 384-dim BGE
 # embedding + metadata mirroring the Tantivy schema. arrow is pinned to
 # the major version lancedb 0.27 expects (^57.2) so RecordBatch

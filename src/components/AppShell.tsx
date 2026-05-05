@@ -76,7 +76,7 @@ export function AppShell() {
 
   // After the catalog snapshot lands, ask the central repo what the
   // newest published builds are and pull anything we don't already have.
-  // The user never has to click "Check for updates" — Atlas ships
+  // The user never has to click "Check for updates" - Atlas ships
   // pre-wired to the central index repo and just keeps current. We
   // skip pre-release auto-fetch when no pre-release Hytale install is
   // detected so users without that patchline enabled don't get data

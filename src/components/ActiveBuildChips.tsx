@@ -32,7 +32,7 @@ export function ActiveBuildChips() {
 
   // Don't crowd the bar with empty placeholders - if no release builds are
   // mounted yet, the user is still on first-run and the chips would just
-  // show "—" twice.
+  // show "-" twice.
   if (releaseBuilds.length === 0 && preReleaseBuilds.length === 0) {
     return null;
   }
@@ -102,7 +102,7 @@ function ActiveBuildChip({
     ? active.manifest.hytale_impl_version
     : builds.length > 0
       ? "Pick…"
-      : "—";
+      : "-";
 
   // If only one build is mounted, skip the dropdown - clicking does nothing
   // because there's nowhere to switch to. Render as a plain span so it

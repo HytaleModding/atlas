@@ -101,8 +101,20 @@ pub fn verify_and_mount_with_pubkey(
     check_compatibility(&verified.manifest)?;
 
     // 4. Extract to the staging directory.
+    //
+    // build_id becomes a directory name under `indexes_root`, so it must
+    // be path-traversal-safe. Hytale `Implementation-Version` strings
+    // legitimately contain dots (e.g. `release-2026.03.26-89796e57b`),
+    // so we can't ban `.` outright; instead reject the components that
+    // make traversal possible: empty, `..` substring, leading `.`,
+    // slashes, NUL, or any other control byte.
     let build_id = verified.manifest.build_id.clone();
-    if build_id.is_empty() || build_id.contains(['/', '\\', '.']) {
+    let bad = build_id.is_empty()
+        || build_id.starts_with('.')
+        || build_id.contains("..")
+        || build_id.contains(['/', '\\', '\0'])
+        || build_id.chars().any(|c| c.is_control());
+    if bad {
         bail!("manifest has unsafe build_id {build_id:?}");
     }
     let staging = indexes_root.join(".tmp").join(&build_id);

@@ -224,7 +224,7 @@ export function SearchPage() {
   const dataLoading = fetchActiveBuildId !== null;
   // Branch flips are handled by `branchStore.set` calling
   // `searchStore.switchSlot` + `tabsStore.switchSlot`, which snapshot the
-  // outgoing branch and restore the incoming one. No reset here — that
+  // outgoing branch and restore the incoming one. No reset here - that
   // would defeat the whole point of preserving each branch's state.
 
   // Build a flat hit list to drive j/k navigation: married rows expose
