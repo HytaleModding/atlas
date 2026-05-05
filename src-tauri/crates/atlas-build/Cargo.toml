@@ -30,10 +30,14 @@ path = "src/main.rs"
 atlas = { path = "../.." }
 
 # Direct deps used by the CLI surface itself (subcommands, signing,
-# async runtime). Everything else flows through atlas_lib.
+# async runtime, log setup, path lookup, dir walking). Everything else
+# flows through atlas_lib.
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+directories = "5"
 ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
 hex = "0.4"
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"

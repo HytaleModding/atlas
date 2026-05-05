@@ -648,10 +648,13 @@ dependencies = [
  "anyhow",
  "atlas",
  "clap",
+ "directories",
  "ed25519-dalek",
  "hex",
  "serde_json",
  "tokio",
+ "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
