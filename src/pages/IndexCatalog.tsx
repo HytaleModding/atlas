@@ -16,11 +16,11 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { cn } from "@/lib/utils";
 import {
   fetchPhaseLabel,
-  formatBytes,
   type FetchPhase,
   type MountedIndexEntry,
   type RemoteBuildResolution,
 } from "@/lib/fetcher";
+import { formatBytes } from "@/lib/format";
 import { indexCompare, type CompareReport } from "@/lib/compare";
 import type { Slot } from "@/lib/patcher";
 import { useFetchStore } from "@/state/fetchStore";

@@ -12,6 +12,7 @@ import { useTabsStore } from "@/state/tabsStore";
 import { useUIPrefsStore } from "@/state/uiPrefsStore";
 import { useKeymap } from "@/lib/keymap";
 import { slotLabel, type Slot } from "@/lib/patcher";
+import { formatBytes } from "@/lib/format";
 import {
   findSibling,
   findSourceSiblings,
@@ -35,9 +36,9 @@ const LEGEND: { label: string; color: string }[] = [
 ];
 
 /** A grouped result row. `source` is the primary; `partner` is the
- *  Javadoc twin when one exists..
+ *  Javadoc twin when one exists.
  *
- *  augments rows with `globalRank`, a 1-based ascending
+ *  `assignRanks` decorates rows with `globalRank`, a 1-based ascending
  *  rank across the post-fusion result list so the FileGroup renderer
  *  can label each row with a `#3`-style chip and sort files by their
  *  best contained rank. */
@@ -628,13 +629,6 @@ function friendlyEmptyPhaseLabel(phase: string | null): string {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GiB`;
-}
-
 const IDLE_EXAMPLES: string[] = [
   "PageManager",
   "getComponent",
@@ -1113,7 +1107,7 @@ function dedupeWithinFile(rows: RowItem[]): RowItem[] {
 
 /** Married hits client-side fusion: group by (slot, fqn). When a group
  *  contains both source and javadoc hits, fuse the highest-scoring
- *  source with the highest-scoring javadoc.. */
+ *  source with the highest-scoring javadoc. */
 function groupMarried(hits: SearchHit[]): RowItem[] {
   const buckets = new Map<string, SearchHit[]>();
   const orderKeys: string[] = [];
@@ -1281,7 +1275,7 @@ function FileGroup({
 }
 
 /** Marker on a row whose match came from Javadoc prose, even though
- *  we're showing the source file.. */
+ *  we're showing the source file. */
 function ViaDocsChip() {
   return (
     <span

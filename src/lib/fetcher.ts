@@ -89,8 +89,8 @@ export async function startFetch(request: FetchRequest): Promise<void> {
 /** Mount a `.tar.zst` artifact already on disk. The Rust side reuses
  *  the same status + events as `index_fetch`, so the UI doesn't need a
  *  parallel state machine; it just sees a fetch that skips Downloading. */
-export async function mountLocal(tarballPath: string): Promise<void> {
-  await invoke<void>("index_mount_local", { tarballPath });
+export function mountLocal(tarballPath: string): Promise<void> {
+  return invoke<void>("index_mount_local", { tarballPath });
 }
 
 export async function getFetchStatus(): Promise<FetchStatus> {
@@ -98,7 +98,7 @@ export async function getFetchStatus(): Promise<FetchStatus> {
   return normalizeFetchStatus(raw);
 }
 
-export async function listMountedIndexes(): Promise<MountedIndexEntry[]> {
+export function listMountedIndexes(): Promise<MountedIndexEntry[]> {
   return invoke<MountedIndexEntry[]>("index_catalog");
 }
 
@@ -128,16 +128,16 @@ export async function resolveRemoteBuild(
 /** Delete a mounted build. The backend refuses if it's the only build
  *  mounted for its patchline. Throws with the backend's error string on
  *  refusal so the caller can surface it in a toast. */
-export async function removeIndex(buildId: string): Promise<void> {
-  await invoke<void>("index_remove", { buildId });
+export function removeIndex(buildId: string): Promise<void> {
+  return invoke<void>("index_remove", { buildId });
 }
 
 /** Pick which mounted build search uses for a patchline. */
-export async function setActiveIndex(
+export function setActiveIndex(
   patchline: Slot,
   buildId: string,
 ): Promise<void> {
-  await invoke<void>("index_set_active", { patchline, buildId });
+  return invoke<void>("index_set_active", { patchline, buildId });
 }
 
 /** Human-readable label for the download phase shown in the UI. */
@@ -198,12 +198,4 @@ export function normalizeFetchStatus(raw: RawFetchStatus): FetchStatus {
     case "error":
       return { kind: "error", buildId: raw.build_id, message: raw.message };
   }
-}
-
-/** Format `size_bytes` in IEC units for the catalog row. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GiB`;
 }

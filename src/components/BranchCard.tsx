@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  formatBytes,
   formatShortDate,
   openInIde,
   phaseLabel,
@@ -24,6 +23,7 @@ import {
   type Slot,
   type SlotOverview,
 } from "@/lib/patcher";
+import { formatBytes } from "@/lib/format";
 import { useBranchStore } from "@/state/branchStore";
 import { useOverviewStore } from "@/state/overviewStore";
 import { usePatcherStore } from "@/state/patcherStore";

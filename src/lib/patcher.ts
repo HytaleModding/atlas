@@ -61,24 +61,24 @@ export type PatcherOverview = {
   ides: DetectedIde[];
 };
 
-export async function getPatcherOverview(): Promise<PatcherOverview> {
+export function getPatcherOverview(): Promise<PatcherOverview> {
   return invoke<PatcherOverview>("patcher_overview");
 }
 
-export async function startDecompile(slot: Slot): Promise<string> {
+export function startDecompile(slot: Slot): Promise<string> {
   return invoke<string>("start_decompile", { slot });
 }
 
-export async function getPatcherStatus(): Promise<PatcherStatus> {
+export function getPatcherStatus(): Promise<PatcherStatus> {
   return invoke<PatcherStatus>("patcher_status");
 }
 
-export async function clearDecompile(slot: Slot): Promise<void> {
-  await invoke<void>("clear_decompile", { slot });
+export function clearDecompile(slot: Slot): Promise<void> {
+  return invoke<void>("clear_decompile", { slot });
 }
 
-export async function openInIde(ideId: IdeId, path: string): Promise<void> {
-  await invoke<void>("open_in_ide", { ideId, path });
+export function openInIde(ideId: IdeId, path: string): Promise<void> {
+  return invoke<void>("open_in_ide", { ideId, path });
 }
 
 /** Human-readable label for a phase, used in the progress UI. */
@@ -107,13 +107,4 @@ export function formatShortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/** Bytes → "1.2 MB" style. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
