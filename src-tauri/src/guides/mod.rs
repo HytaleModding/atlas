@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
@@ -447,6 +447,47 @@ fn write_manifest(path: &Path, m: &Manifest) -> Result<()> {
     let raw = serde_json::to_string_pretty(m).context("serializing guides manifest")?;
     std::fs::write(path, raw)
         .with_context(|| format!("writing guides manifest {}", path.display()))?;
+    Ok(())
+}
+
+/// Upstream HM docs repo. The producer-side `atlas-build --hm-docs-fetch`
+/// flag references the same URL; kept in sync so consumer + producer
+/// pull from identical content.
+const HM_DOCS_REPO_URL: &str = "https://github.com/HytaleModding/site";
+
+/// Shallow-clone the HM docs repo into `repo_dir` if it doesn't already
+/// exist. The guides backend needs a populated `<cache_root>/hm-docs/site/`
+/// to walk; without this step the desktop client would silently serve
+/// zero `hm_doc` results because the repo was only ever fetched on the
+/// producer side (during `atlas-build`).
+///
+/// Idempotent: returns `Ok(())` immediately if the directory exists.
+/// Refresh / update is a separate concern handled by the user explicitly
+/// (or a future periodic task) - we don't want to nuke and re-clone on
+/// every launch.
+pub fn ensure_repo_cloned(repo_dir: &Path) -> Result<()> {
+    if repo_dir.is_dir() {
+        return Ok(());
+    }
+    let parent = repo_dir
+        .parent()
+        .with_context(|| format!("repo dir {} has no parent", repo_dir.display()))?;
+    std::fs::create_dir_all(parent)
+        .with_context(|| format!("creating HM docs cache dir {}", parent.display()))?;
+
+    tracing::info!(
+        repo = HM_DOCS_REPO_URL,
+        target = %repo_dir.display(),
+        "cloning HM docs repo"
+    );
+    let status = std::process::Command::new("git")
+        .args(["clone", "--depth", "1", HM_DOCS_REPO_URL])
+        .arg(repo_dir)
+        .status()
+        .context("running `git clone` (is git installed and on PATH?)")?;
+    if !status.success() {
+        bail!("git clone {HM_DOCS_REPO_URL} failed (exit {})", status);
+    }
     Ok(())
 }
 

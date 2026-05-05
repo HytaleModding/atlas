@@ -124,15 +124,24 @@ pub fn run() {
     // outside the source-section index lifecycle so guides refresh
     // cheaply without forcing a full re-index.
     let guides_repo = cache_root().join("hm-docs").join("site");
-    let guides_index = guides::GuidesIndex::new(data_dir.clone(), guides_repo);
+    let guides_index = guides::GuidesIndex::new(data_dir.clone(), guides_repo.clone());
     {
-        // Sync at startup on the runtime so app boot isn't blocked on
-        // the first index walk.
+        // Clone-if-missing + sync at startup on the runtime so app boot
+        // isn't blocked on the first network round-trip + index walk.
+        // The clone is best-effort: if it fails (no git on PATH, network
+        // down, repo unreachable), `sync_and_refresh` no-ops gracefully
+        // on the still-missing dir and search just returns zero hm_doc
+        // results until the next launch.
         let g = guides_index.clone();
+        let repo = guides_repo;
         handle.spawn(async move {
-            // walk_docs is blocking I/O; spawn_blocking keeps the
-            // async runtime threads free.
-            let res = tokio::task::spawn_blocking(move || g.sync_and_refresh()).await;
+            let res = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+                if let Err(err) = guides::ensure_repo_cloned(&repo) {
+                    tracing::warn!(?err, "HM docs clone failed; guides will be empty");
+                }
+                g.sync_and_refresh()
+            })
+            .await;
             match res {
                 Ok(Ok(())) => tracing::info!("guides index ready"),
                 Ok(Err(err)) => tracing::warn!(?err, "guides sync failed"),
