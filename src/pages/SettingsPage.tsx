@@ -283,7 +283,7 @@ function DeveloperSection() {
       multiple: false,
       directory: false,
       filters: [{ name: "Atlas data file", extensions: ["zst"] }],
-      title: "Pick a reference data file (.tar.zst)",
+      title: "Pick an Atlas data file",
     });
     if (typeof picked === "string" && picked.length > 0) {
       void startLocalMount(picked);

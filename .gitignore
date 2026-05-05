@@ -48,9 +48,10 @@ desktop.ini
 
 # Atlas local data (decompiled sources, indexes, cached docs)
 # These are large and machine-specific. Never commit.
-# DECOMPILED HYTALE SOURCE LIVES UNDER pipeline-workspace/ - LEGAL: NEVER COMMIT.
+# DECOMPILED HYTALE SOURCE LIVES UNDER pipeline-workspace/ AND src-tauri/work/ - LEGAL: NEVER COMMIT.
 /workspace/
 /pipeline-workspace/
+/src-tauri/work/
 /indexes/
 /cache/
 

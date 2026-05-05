@@ -144,15 +144,15 @@ export async function setActiveIndex(
 export function fetchPhaseLabel(phase: FetchPhase): string {
   switch (phase) {
     case "resolving":
-      return "Resolving artifact…";
+      return "Looking up the latest version…";
     case "downloading":
       return "Downloading…";
     case "verifying":
-      return "Verifying signature…";
+      return "Verifying download…";
     case "extracting":
-      return "Extracting…";
+      return "Unpacking…";
     case "mounting":
-      return "Mounting…";
+      return "Finishing up…";
   }
 }
 

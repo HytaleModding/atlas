@@ -14,11 +14,15 @@ Tauri gives a real native window with system integration (file pickers, OS notif
 
 ## Run it
 
-Pre-built downloads live on the GitHub Releases page once `v0.1.0` is tagged. Until then, build from source.
+Pre-built installers live on the [Releases page](https://github.com/Vibe-Theory/atlastest/releases). Download the one for your OS and run it.
+
+> On Windows you may see a SmartScreen warning ("Windows protected your PC") because the build is not yet code-signed. Click **More info** then **Run anyway**. Code-signing is on the roadmap.
+
+To build from source instead:
 
 ```
-git clone https://github.com/HytaleModding/atlas.git
-cd atlas
+git clone https://github.com/Vibe-Theory/atlastest.git
+cd atlastest
 npm install
 npm run tauri dev
 ```
@@ -48,7 +52,7 @@ Atlas pulls two things from this repo's GitHub Releases:
 | The Atlas app | Tauri's built-in updater, signed |
 | Hytale reference data | In-app fetcher, Ed25519 signed |
 
-Both are signature-verified before mount. The user sees an "Update available" prompt; everything else is invisible.
+Both are signature-verified before they load. The user sees an "Update available" prompt; everything else is invisible.
 
 > The public key currently in `src-tauri/signing/atlas-pubkey.hex` is a development placeholder so the verify path is exercisable in local builds. Hytale Modding CI will replace it with the production key before any signed release is cut.
 
