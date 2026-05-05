@@ -69,13 +69,16 @@ tree-sitter-java = "0.21"
 fastembed = "4"
 
 # ort (ONNX Runtime) is a transitive dep of fastembed but pulled in
-# directly here to enable the DirectML execution provider on Windows.
-# DirectML is the Windows-native GPU path: ships with the OS, runs on
-# any DX12 GPU (NVIDIA, AMD, Intel iGPU), and yields ~30-50x CPU
-# throughput on BGE-small without requiring a separate CUDA Toolkit
-# install. Version pin must match fastembed 4.9's transitive ort pin
-# so we don't end up with two ort copies.
-ort = { version = "=2.0.0-rc.9", features = ["directml"] }
+# directly here so we can opt into the DirectML execution provider on
+# Windows. DirectML is the Windows-native GPU path: ships with the OS,
+# runs on any DX12 GPU (NVIDIA, AMD, Intel iGPU), and yields ~30-50x
+# CPU throughput on BGE-small without requiring a separate CUDA Toolkit
+# install. The directml feature is Windows-only because it pulls in
+# FFI bindings against a system library that does not exist on Linux
+# or macOS. On those platforms we fall through to the CPU provider.
+# Version pin must match fastembed 4.9's transitive ort pin so we
+# don't end up with two ort copies.
+ort = { version = "=2.0.0-rc.9" }
 
 # Vector store - LanceDB holds one row per chunk with the 384-dim BGE
 # embedding + metadata mirroring the Tantivy schema. arrow is pinned to
@@ -134,6 +137,13 @@ rmcp = { version = "1.5", features = [
     "tower",
 ] }
 schemars = "1"
+
+# Windows-only: enable the DirectML execution provider on top of the
+# base ort dep declared above. Cargo merges this with the [dependencies]
+# entry on the same crate, so on Windows ort is built with the
+# `directml` feature and on Linux/macOS it isn't.
+[target.'cfg(windows)'.dependencies]
+ort = { version = "=2.0.0-rc.9", features = ["directml"] }
 
 [dev-dependencies]
 # Temp dirs for module-level integration tests (symbols sidecar, fetcher,

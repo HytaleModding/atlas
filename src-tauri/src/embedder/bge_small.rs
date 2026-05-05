@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+#[cfg(target_os = "windows")]
 use ort::execution_providers::DirectMLExecutionProvider;
 
 use super::{Embedder, EMBEDDING_DIM};
@@ -29,36 +30,41 @@ impl BgeSmall {
         std::fs::create_dir_all(&cache_dir)
             .with_context(|| format!("creating model cache {}", cache_dir.display()))?;
 
-        // Try DirectML (GPU) first; fall back to CPU if it fails to
-        // initialize. DirectML is Windows-native and ships with the OS,
-        // so on a Windows machine with any DX12 GPU it should always
-        // succeed. CPU fallback exists so non-Windows or headless builds
-        // still index, just slowly.
-        let gpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
-            .with_cache_dir(cache_dir.clone())
-            .with_show_download_progress(false)
-            .with_execution_providers(vec![
-                DirectMLExecutionProvider::default().build(),
-            ]);
+        // On Windows, try DirectML (GPU) first; fall back to CPU if it
+        // fails to initialize. DirectML is Windows-native and ships with
+        // the OS, so on a Windows machine with any DX12 GPU it should
+        // always succeed. On non-Windows targets there is no DirectML
+        // library to link against, so we skip the GPU attempt entirely
+        // and go straight to CPU. Indexing is slower but functional.
+        #[cfg(target_os = "windows")]
+        {
+            let gpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
+                .with_cache_dir(cache_dir.clone())
+                .with_show_download_progress(false)
+                .with_execution_providers(vec![
+                    DirectMLExecutionProvider::default().build(),
+                ]);
 
-        match TextEmbedding::try_new(gpu_opts) {
-            Ok(inner) => {
-                tracing::info!("BGE-small embedder running on DirectML (GPU)");
-                Ok(Self { inner })
-            }
-            Err(gpu_err) => {
-                tracing::warn!(
-                    error = %gpu_err,
-                    "DirectML init failed, falling back to CPU embedder"
-                );
-                let cpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
-                    .with_cache_dir(cache_dir)
-                    .with_show_download_progress(false);
-                let inner = TextEmbedding::try_new(cpu_opts)
-                    .context("loading BGE-small-en-v1.5 via fastembed-rs (CPU fallback)")?;
-                Ok(Self { inner })
+            match TextEmbedding::try_new(gpu_opts) {
+                Ok(inner) => {
+                    tracing::info!("BGE-small embedder running on DirectML (GPU)");
+                    return Ok(Self { inner });
+                }
+                Err(gpu_err) => {
+                    tracing::warn!(
+                        error = %gpu_err,
+                        "DirectML init failed, falling back to CPU embedder"
+                    );
+                }
             }
         }
+
+        let cpu_opts = InitOptions::new(EmbeddingModel::BGESmallENV15)
+            .with_cache_dir(cache_dir)
+            .with_show_download_progress(false);
+        let inner = TextEmbedding::try_new(cpu_opts)
+            .context("loading BGE-small-en-v1.5 via fastembed-rs (CPU fallback)")?;
+        Ok(Self { inner })
     }
 }
 
