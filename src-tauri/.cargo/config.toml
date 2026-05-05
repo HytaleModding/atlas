@@ -1,0 +1,9 @@
+# Use rust-lld as the linker on Windows MSVC. Atlas links ~1000 deps
+# (lancedb + ort + datafusion + arrow + tantivy + fastembed are huge),
+# and the default `link.exe` linker dominated incremental rebuild time
+# - on the order of minutes per edit. rust-lld ships with rustc, is
+# drop-in compatible for everything Atlas links, and typically cuts the
+# link step 3-5x. If a future dep ever needs a niche MSVC-only linker
+# feature, revert this file.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
