@@ -97,6 +97,15 @@ jobs:
           prefix-key: v1-cargo
           cache-on-failure: true
 
+      # sccache caches the compile output of *our* crates (atlas_lib +
+      # atlas), not just deps. Swatinem/rust-cache above already caches
+      # third-party deps as a target/-shaped blob; sccache fills the gap
+      # for the workspace itself, which is the bulk of the cargo build
+      # time (~11 of the ~19 min on warm builds). Backed by GHA cache so
+      # no external service required.
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -107,14 +116,30 @@ jobs:
         run: npm ci
 
       - name: Build Tauri bundle
+        # CARGO_PROFILE_RELEASE_* env overrides switch the iteration-loop
+        # MSI to a faster-compiling release profile (LTO off, more
+        # codegen-units). Tagged ships go through release-app.yml which
+        # does NOT set these, so public installers still get the slow
+        # fully-optimized profile. Worst-case runtime cost on the smoke
+        # MSI is a few % - not noticeable when the goal is "click around
+        # and see if anything breaks".
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+          CARGO_INCREMENTAL: "0"
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: npx tauri build --target x86_64-pc-windows-msvc
+
+      - name: Print sccache stats
+        if: always()
+        run: sccache --show-stats || true
 
       - name: Upload installers as artifact
         uses: actions/upload-artifact@v4
         with:
           name: atlas-windows-x64
           path: |
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           if-no-files-found: error
           retention-days: 14
