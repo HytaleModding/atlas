@@ -1,7 +1,6 @@
 //! Verify a downloaded artifact, extract it to a staging dir, then
 //! atomic-rename into `<indexes>/<build_id>/` and write the `.ok`
-//! marker that `SearchCatalog` requires before it'll open the index
-//!.
+//! marker that `SearchCatalog` requires before it'll open the index.
 //!
 //! Flow:
 //!   1. `artifact::verify` streams the `.tar.zst` once to confirm
@@ -122,9 +121,8 @@ pub fn verify_and_mount_with_pubkey(
 
     // Clean any leftover staging from a previous crashed attempt.
     if staging.exists() {
-        std::fs::remove_dir_all(&staging).with_context(|| {
-            format!("clearing stale staging dir {}", staging.display())
-        })?;
+        std::fs::remove_dir_all(&staging)
+            .with_context(|| format!("clearing stale staging dir {}", staging.display()))?;
     }
     std::fs::create_dir_all(&staging)
         .with_context(|| format!("creating staging dir {}", staging.display()))?;
@@ -136,20 +134,14 @@ pub fn verify_and_mount_with_pubkey(
     // it had `.ok`, SearchCatalog would already be serving it and the
     // fetcher would have errored earlier in the flow).
     if final_dir.exists() {
-        std::fs::remove_dir_all(&final_dir).with_context(|| {
-            format!("removing stale final dir {}", final_dir.display())
-        })?;
+        std::fs::remove_dir_all(&final_dir)
+            .with_context(|| format!("removing stale final dir {}", final_dir.display()))?;
     }
     if let Some(parent) = final_dir.parent() {
         std::fs::create_dir_all(parent).ok();
     }
-    std::fs::rename(&staging, &final_dir).with_context(|| {
-        format!(
-            "renaming {} → {}",
-            staging.display(),
-            final_dir.display()
-        )
-    })?;
+    std::fs::rename(&staging, &final_dir)
+        .with_context(|| format!("renaming {} → {}", staging.display(), final_dir.display()))?;
 
     // 6. Write the `.ok` marker last. Its presence means "this dir is
     // fully extracted + hash-verified + signature-verified".
@@ -240,10 +232,7 @@ fn extract_all(archive: &Path, dest: &Path, progress: &dyn ExtractProgress) -> R
         let decoder = zstd::Decoder::new(file).context("zstd decoder for count pass")?;
         let mut ar = tar::Archive::new(decoder);
         let mut n = 0;
-        for entry in ar
-            .entries()
-            .context("reading tar entries for count pass")?
-        {
+        for entry in ar.entries().context("reading tar entries for count pass")? {
             entry.context("iterating tar entry in count pass")?;
             n += 1;
         }
@@ -251,8 +240,8 @@ fn extract_all(archive: &Path, dest: &Path, progress: &dyn ExtractProgress) -> R
     };
 
     // Second pass: extract.
-    let file = File::open(archive)
-        .with_context(|| format!("opening archive {}", archive.display()))?;
+    let file =
+        File::open(archive).with_context(|| format!("opening archive {}", archive.display()))?;
     let decoder = zstd::Decoder::new(file).context("zstd decoder for extract pass")?;
     let mut ar = tar::Archive::new(decoder);
     ar.set_preserve_permissions(false);
@@ -264,25 +253,23 @@ fn extract_all(archive: &Path, dest: &Path, progress: &dyn ExtractProgress) -> R
         .context("reading tar entries for extract pass")?
     {
         let mut entry = entry.context("iterating tar entry")?;
-        let rel = entry
-            .path()
-            .context("reading tar entry path")?
-            .into_owned();
+        let rel = entry.path().context("reading tar entry path")?.into_owned();
 
         // Defensive: reject path-escape. tar-rs already does this, but
         // we bail clearly so log messages explain what happened.
-        if rel
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::RootDir))
-        {
+        if rel.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir | std::path::Component::RootDir
+            )
+        }) {
             bail!("tar entry escapes staging dir: {}", rel.display());
         }
 
         let out_path = dest.join(&rel);
         if entry.header().entry_type().is_dir() {
-            std::fs::create_dir_all(&out_path).with_context(|| {
-                format!("creating dir {}", out_path.display())
-            })?;
+            std::fs::create_dir_all(&out_path)
+                .with_context(|| format!("creating dir {}", out_path.display()))?;
         } else {
             if let Some(parent) = out_path.parent() {
                 std::fs::create_dir_all(parent)
@@ -304,10 +291,11 @@ fn extract_all(archive: &Path, dest: &Path, progress: &dyn ExtractProgress) -> R
 
 /// Directory names that live directly under `<indexes_root>/` but are
 /// NOT mounted-artifact dirs and so must not be reaped for missing the
-/// `.ok` marker. The `tantivy/` and `lance/` containers hold the legacy
-/// per-slot subdirs (`tantivy/release/`, `lance/release/`, …) that
-/// `SearchCatalog` reads from after [`wire_legacy_slot`] runs.
-const RESERVED_NON_ARTIFACT_DIRS: &[&str] = &["tantivy", "lance"];
+/// `.ok` marker. The `tantivy/`, `lance/`, and `javadocs/` containers
+/// hold the legacy per-slot subdirs (`tantivy/release/`,
+/// `javadocs/pre-release/`, …) that `SearchCatalog` and the inline-doc
+/// renderer read from after [`wire_legacy_slot`] runs.
+const RESERVED_NON_ARTIFACT_DIRS: &[&str] = &["tantivy", "lance", "javadocs"];
 
 /// Scan `<indexes_root>/` for directories lacking the `.ok` marker and
 /// remove them. Called at startup so a mid-extract crash doesn't leave
@@ -418,7 +406,11 @@ pub fn wire_legacy_slot(mounted: &MountedArtifact, indexes_root: &Path) -> Resul
     let m = &mounted.manifest;
     let existing = IndexMetadata::read(&dst_tantivy);
     let (docs, indexed_at, decompile_mtime) = match &existing {
-        Some(prev) => (prev.docs, prev.indexed_at.clone(), prev.decompile_mtime.clone()),
+        Some(prev) => (
+            prev.docs,
+            prev.indexed_at.clone(),
+            prev.decompile_mtime.clone(),
+        ),
         None => (0, m.created_at.clone(), m.created_at.clone()),
     };
     let meta = IndexMetadata {
@@ -470,11 +462,8 @@ fn move_dir_replacing(src: &Path, dst: &Path) -> Result<()> {
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)
-        .with_context(|| format!("creating {}", dst.display()))?;
-    for entry in std::fs::read_dir(src)
-        .with_context(|| format!("reading {}", src.display()))?
-    {
+    std::fs::create_dir_all(dst).with_context(|| format!("creating {}", dst.display()))?;
+    for entry in std::fs::read_dir(src).with_context(|| format!("reading {}", src.display()))? {
         let entry = entry?;
         let from = entry.path();
         let to = dst.join(entry.file_name());
@@ -489,7 +478,6 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 }
 
 /// Returns true if the dir is a fully-extracted, hash-verified mount.
-#[allow(dead_code)]
 pub fn is_mounted(index_dir: &Path) -> bool {
     index_dir.is_dir() && index_dir.join(MOUNT_OK_MARKER).is_file()
 }
@@ -576,13 +564,9 @@ mod tests {
         .unwrap();
 
         let indexes_root = tmp.path().join("indexes");
-        let mounted = verify_and_mount_with_pubkey(
-            &signed_path,
-            &indexes_root,
-            &pubkey_bytes,
-            &NoProgress,
-        )
-        .expect("verify_and_mount_with_pubkey");
+        let mounted =
+            verify_and_mount_with_pubkey(&signed_path, &indexes_root, &pubkey_bytes, &NoProgress)
+                .expect("verify_and_mount_with_pubkey");
 
         assert_eq!(mounted.build_id, "release-89796e57b");
         assert!(mounted.mounted_at.ends_with("release-89796e57b"));
@@ -643,8 +627,7 @@ mod tests {
         .unwrap_err();
         let msg = format!("{err:#}");
         assert!(
-            msg.contains("signature verification failed")
-                || msg.contains("fingerprint"),
+            msg.contains("signature verification failed") || msg.contains("fingerprint"),
             "expected signature/fingerprint error, got: {msg}"
         );
     }
@@ -692,10 +675,7 @@ mod tests {
 
         assert!(root.join("good").is_dir(), "mounted dir must survive");
         assert!(!root.join("stale").exists(), "stale dir must be removed");
-        assert!(
-            !root.join(".tmp").exists(),
-            ".tmp must be wiped on startup"
-        );
+        assert!(!root.join(".tmp").exists(), ".tmp must be wiped on startup");
     }
 
     #[test]
