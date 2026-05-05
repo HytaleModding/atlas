@@ -60,47 +60,19 @@ concurrency:
 
 jobs:
   build:
-    name: Build (${{ matrix.platform.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: atlas-windows-x64
-            bundle_glob: |
-              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: atlas-macos-aarch64
-            bundle_glob: |
-              src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-              src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            artifact_name: atlas-linux-amd64
-            bundle_glob: |
-              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-              src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-
-    runs-on: ${{ matrix.platform.os }}
+    name: Build (windows)
+    # Windows-only smoke build on every push. Most Atlas users are on
+    # Windows and most regressions surface there first, so building
+    # only Windows on the iteration loop cuts runner-minutes by ~67%
+    # without losing meaningful coverage. macOS and Linux installers
+    # are still produced by `release-app.yml` on tag, so a green tag
+    # still ships all three platforms.
+    runs-on: windows-latest
     timeout-minutes: 120
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Linux build deps
-        if: matrix.platform.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3
@@ -110,13 +82,20 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform.target }}
+          targets: x86_64-pc-windows-msvc
 
+      # `shared-key` shares the cache across runs / workflows. `prefix-key`
+      # is a manual reset lever - bump it to force-invalidate everything
+      # when the dep tree shifts in a way that can't be incrementally
+      # recompiled. `cache-on-failure` keeps the cache populated even
+      # when the build itself fails (so the next attempt isn't cold).
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ matrix.platform.target }}
+          shared-key: atlas-x86_64-pc-windows-msvc
+          prefix-key: v1-cargo
+          cache-on-failure: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -128,12 +107,14 @@ jobs:
         run: npm ci
 
       - name: Build Tauri bundle
-        run: npx tauri build --target ${{ matrix.platform.target }}
+        run: npx tauri build --target x86_64-pc-windows-msvc
 
       - name: Upload installers as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform.artifact_name }}
-          path: ${{ matrix.platform.bundle_glob }}
+          name: atlas-windows-x64
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           if-no-files-found: error
           retention-days: 14

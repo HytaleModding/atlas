@@ -82,11 +82,20 @@ jobs:
         with:
           targets: ${{ matrix.platform.target }}
 
+      # `shared-key` is what makes the cache reusable across workflows
+      # (build-app and release-app point at the same key per target, so
+      # a warm Windows build-app cache primes the Windows release-app
+      # build). `prefix-key` is a manual reset lever; bump it when the
+      # dep tree drifts in a way incremental compilation can't recover
+      # from. `cache-on-failure` saves cache even on failed builds so
+      # the next attempt isn't cold.
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ matrix.platform.target }}
+          shared-key: atlas-${{ matrix.platform.target }}
+          prefix-key: v1-cargo
+          cache-on-failure: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
