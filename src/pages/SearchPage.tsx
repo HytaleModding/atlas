@@ -1126,8 +1126,15 @@ function groupMarried(hits: SearchHit[]): RowItem[] {
     const source = bestOfType(bucket, "source");
     const javadoc = bestOfType(bucket, "hypixel_doc");
     if (source && javadoc) {
-      const primary = source.score >= javadoc.score ? source : javadoc;
-      const partner = primary === source ? javadoc : source;
+      // Always prefer source as the primary so the right-pane viewer shows
+      // syntax-highlighted code; the javadoc rides as `partner` and surfaces
+      // both inline (above class/method declarations via InlineJavadocBox)
+      // and in the SiblingPane. Score-based primary selection put plaintext
+      // javadoc prose on the right whenever the prose happened to outscore
+      // the source chunk, which fights the user's "code on the right"
+      // expectation.
+      const primary = source;
+      const partner = javadoc;
       out.push({ kind: "married", primary, partner, globalRank: 0 });
       const consumed = new Set([source, javadoc]);
       for (const h of bucket) {

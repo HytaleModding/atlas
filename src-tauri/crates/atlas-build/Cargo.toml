@@ -1,0 +1,43 @@
+[package]
+name = "atlas-build"
+version = "0.1.8"
+description = "Atlas central index builder CLI"
+authors = ["Atlas contributors"]
+edition = "2021"
+
+# `atlas-build` is the headless central-index pipeline binary.
+# Splitting it out of the Tauri app crate (`atlas`) means:
+# - `tauri build` no longer compiles a CLI it doesn't need.
+# - `build-index.yml` no longer compiles the Tauri shell + GUI deps.
+# - sccache + Swatinem/rust-cache see two smaller crate units instead
+#   of one giant one, which materially improves cache hit rates.
+#
+# The code itself is unchanged from when it lived at
+# `src-tauri/src/bin/atlas_build.rs`; it pulls every domain module
+# (indexer, embedder, fetcher, etc.) from `atlas_lib` via the path dep
+# below. As atlas_lib gets further split into smaller crates, this
+# Cargo.toml is where those finer-grained path deps will land.
+
+[[bin]]
+name = "atlas-build"
+path = "src/main.rs"
+
+[dependencies]
+# The atlas Tauri app's library half. We only consume `atlas_lib::*`
+# here; the bin (`atlas`) and the GUI deps (Tauri, axum, etc.) are
+# unused at link time but cargo still pulls them in as transitive
+# deps - that's the next layer of the split to remove.
+atlas = { path = "../.." }
+
+# Direct deps used by the CLI surface itself (subcommands, signing,
+# async runtime, log setup, path lookup, dir walking). Everything else
+# flows through atlas_lib.
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+directories = "5"
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8", "pem"] }
+hex = "0.4"
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+walkdir = "2"

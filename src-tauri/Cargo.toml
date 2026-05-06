@@ -1,14 +1,30 @@
 [package]
 name = "atlas"
-version = "0.1.6"
+version = "0.1.8"
 description = "Atlas - mod author dashboard for Hytale"
 authors = ["Atlas contributors"]
 edition = "2021"
-# Two bin targets live in this crate: `atlas` (the Tauri desktop app)
-# and `atlas-build` (the central-builder CLI). `cargo run` without
-# `--bin` defaults to the desktop app - that's what `npm run tauri dev`
-# invokes under the hood.
+# Single bin in this crate now: `atlas` (the Tauri desktop app). The
+# central-builder CLI (`atlas-build`) was extracted to its own
+# workspace member at `crates/atlas-build/` - see the [workspace]
+# section below. `npm run tauri dev` still resolves to the `atlas` bin
+# because `tauri build` operates from this directory.
 default-run = "atlas"
+
+# Workspace root. Members live under `crates/`. The atlas Tauri app
+# itself stays as the workspace's root [package] so `tauri build` keeps
+# working without reconfiguration. Future splits (atlas-search,
+# atlas-embed, atlas-fetcher, atlas-http) will land as additional
+# `crates/*` members and shrink this root package.
+#
+# `default-members` constrains a bare `cargo build` at the workspace
+# root to only the Tauri app, so `tauri build` does not silently
+# compile `atlas-build` (which would defeat the purpose of the split).
+# To build the CLI explicitly: `cargo build -p atlas-build` or
+# `cd crates/atlas-build && cargo build`.
+[workspace]
+members = ["crates/atlas-build"]
+default-members = ["."]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,13 +34,6 @@ default-run = "atlas"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "atlas_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
-
-# `atlas-build`: headless CLI used by the central builder (and local
-# repro) to pack, sign, and verify index artifacts. Shares every module
-# with the desktop app; only the orchestration differs.
-[[bin]]
-name = "atlas-build"
-path = "src/bin/atlas_build.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

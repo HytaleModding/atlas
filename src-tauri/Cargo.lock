@@ -598,7 +598,7 @@ dependencies = [
 
 [[package]]
 name = "atlas"
-version = "0.1.6"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "arrow",
@@ -639,6 +639,22 @@ dependencies = [
  "walkdir",
  "zip",
  "zstd",
+]
+
+[[package]]
+name = "atlas-build"
+version = "0.1.8"
+dependencies = [
+ "anyhow",
+ "atlas",
+ "clap",
+ "directories",
+ "ed25519-dalek",
+ "hex",
+ "serde_json",
+ "tokio",
+ "tracing-subscriber",
+ "walkdir",
 ]
 
 [[package]]
