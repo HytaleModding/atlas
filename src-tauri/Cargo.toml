@@ -92,15 +92,7 @@ fastembed = "4"
 # or macOS. On those platforms we fall through to the CPU provider.
 # Version pin must match fastembed 4.9's transitive ort pin so we
 # don't end up with two ort copies.
-#
-# `download-binaries` makes ort fetch a prebuilt onnxruntime native
-# library at build time. Without this feature ort-sys expects to link
-# against a system-installed `onnxruntime` static lib, which the CI
-# runner doesn't have - the build dies with `could not find native
-# static library 'onnxruntime'`. Local Windows dev installs picked it
-# up implicitly via fastembed's default features, but our explicit
-# entry here disables those defaults, so we have to opt back in.
-ort = { version = "=2.0.0-rc.9", features = ["download-binaries"] }
+ort = { version = "=2.0.0-rc.9" }
 
 # Vector store - LanceDB holds one row per chunk with the 384-dim BGE
 # embedding + metadata mirroring the Tantivy schema. arrow is pinned to
@@ -165,7 +157,7 @@ schemars = "1"
 # entry on the same crate, so on Windows ort is built with the
 # `directml` feature and on Linux/macOS it isn't.
 [target.'cfg(windows)'.dependencies]
-ort = { version = "=2.0.0-rc.9", features = ["download-binaries", "directml"] }
+ort = { version = "=2.0.0-rc.9", features = ["directml"] }
 
 [dev-dependencies]
 # Temp dirs for module-level integration tests (symbols sidecar, fetcher,
