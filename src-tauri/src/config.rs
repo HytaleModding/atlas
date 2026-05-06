@@ -119,7 +119,16 @@ pub fn save(cfg: &AtlasConfig) -> io::Result<()> {
 /// Attempt to locate the Hytale release install in its default Windows
 /// location. Returns the path only if `Server/HytaleServer.jar` exists.
 pub fn detect_release_path() -> Option<PathBuf> {
-    default_release_candidate().filter(|p| is_valid_hytale_install(p))
+    let candidate = default_release_candidate();
+    let result = candidate.clone().filter(|p| is_valid_hytale_install(p));
+    tracing::info!(
+        target: "atlas::path_check",
+        candidate = ?candidate.as_ref().map(|p| p.display().to_string()),
+        appdata = ?std::env::var_os("APPDATA").map(|s| s.to_string_lossy().to_string()),
+        valid = result.is_some(),
+        "detect_release_path"
+    );
+    result
 }
 
 /// Attempt to locate the Hytale pre-release install.
@@ -177,6 +186,41 @@ pub fn default_candidate(slot: Slot) -> Option<PathBuf> {
 /// Run a full validation and return a structured result. Used by the front-end
 /// for the first-run wizard's live validation feedback.
 pub fn check_hytale_path(path: &Path) -> HytalePathCheck {
+    let path_str = path.to_string_lossy();
+    let path_bytes = path_str.as_bytes();
+    let path_meta = std::fs::metadata(path);
+    let canonical = std::fs::canonicalize(path);
+    tracing::info!(
+        target: "atlas::path_check",
+        path = %path_str,
+        path_len = path_bytes.len(),
+        path_bytes_hex = %hex::encode(path_bytes),
+        is_dir = path.is_dir(),
+        exists = path.exists(),
+        metadata_ok = path_meta.is_ok(),
+        metadata_err_kind = ?path_meta.as_ref().err().map(|e| e.kind()),
+        metadata_raw_os_err = ?path_meta.as_ref().err().and_then(|e| e.raw_os_error()),
+        canonical_ok = canonical.is_ok(),
+        canonical_err_kind = ?canonical.as_ref().err().map(|e| e.kind()),
+        canonical_raw_os_err = ?canonical.as_ref().err().and_then(|e| e.raw_os_error()),
+        "check_hytale_path invoked"
+    );
+
+    // Walk parents to find the first one that fails to stat.
+    // Tells us if the failure is at a specific path level (e.g. AppData itself
+    // is fine but Hytale isn't) vs a leaf-only failure.
+    let mut cur = Some(path);
+    while let Some(p) = cur {
+        let m = std::fs::metadata(p);
+        tracing::info!(
+            target: "atlas::path_check",
+            level = %p.display(),
+            ok = m.is_ok(),
+            raw_os_err = ?m.as_ref().err().and_then(|e| e.raw_os_error()),
+            "ancestor stat"
+        );
+        cur = p.parent();
+    }
     if !path.is_dir() {
         return HytalePathCheck {
             path: path.to_path_buf(),
@@ -185,6 +229,14 @@ pub fn check_hytale_path(path: &Path) -> HytalePathCheck {
         };
     }
     let jar = path.join("Server").join("HytaleServer.jar");
+    let jar_meta = std::fs::metadata(&jar);
+    tracing::info!(
+        target: "atlas::path_check",
+        jar = %jar.display(),
+        is_file = jar.is_file(),
+        metadata = ?jar_meta.as_ref().map(|m| m.is_file()).map_err(|e| e.kind()),
+        "jar check"
+    );
     if !jar.is_file() {
         return HytalePathCheck {
             path: path.to_path_buf(),
